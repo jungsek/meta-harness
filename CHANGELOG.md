@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-07-27
+
+- `meta-harness explain [category]` — prints the source file shape, frontmatter
+  keys, an example, and where it compiles to. The schema now lives in code, so
+  the skill points at it instead of restating it.
+- Skill restructured for the agent-authoring flow: short `SKILL.md` plus
+  `references/harness-format.md` (HARNESS.md format), `references/interview.md`
+  (guided path), `references/review.md` (gap + best-practice checklist).
+- `init` now presents all four agent entry points: plain ask, ask with inline
+  requirements, spec-first via HARNESS.md, or guided interview.
+
 ## 0.4.0 — 2026-07-27
 
 - `init` now installs the agent skill by default via `npx skills add
