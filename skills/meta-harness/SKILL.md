@@ -45,10 +45,15 @@ duplicates state and goes stale the first time anyone edits a rule, whereas
 **User:** "our agents keep running migrations without asking, make that stop"
 
 A good response writes `rules/safety.md` (stating the boundary in prose, which
-is what the agent actually reads) *and* adds a `permissions` deny entry to
-`settings/claude.settings.jsonc` (which enforces it even when the agent skims
+is what the agent actually reads) *and* a deny entry in
+`permissions/permissions.jsonc` (which enforces it even when the agent skims
 the rules), then runs `generate`. Rules persuade; permissions enforce. For
 anything that genuinely matters, do both — a rule alone is a suggestion.
+
+Permissions are declared once and compile to every runtime that can enforce
+them: Claude's `permissions` block and Codex's Starlark exec policy. Don't
+hand-write either dialect into `settings/`; declaring the same thing twice is
+a hard error at generate time, by design.
 
 Then: "Migrations now need your approval — Claude will refuse the command
 outright, and both Claude and Codex have the rule in their instructions."
@@ -63,7 +68,7 @@ Some things sit outside the compiler and are yours to handle directly:
 
 - **`CLAUDE.md`** — hand-authored. `AGENTS.md` is partly managed: meta-harness owns a marker-delimited block carrying the rules (Codex and Hermes have no prose rules directory), and everything outside it is the user's and preserved. Write their project prose there; never edit inside the markers.
 - **Skills** — `npx skills add <package>` owns skill directories and `skills-lock.json`.
-- **Codex hook trust** — a new or changed `.codex/hooks.json` entry silently does not run until the user opens `codex` once and accepts the trust prompt. Tell them; you cannot do it for them.
+- **Codex directory trust** — project hooks *and* exec policies (`.codex/rules/`) load only after the user opens `codex` once and accepts the trust prompt. Until then a `deny` permission silently does not stop anything, verified against codex 0.145. Tell them; you cannot do it for them.
 - **Anything in `~/`** — global config is deliberately out of scope.
 
 Two portability traps worth knowing: `$CLAUDE_PROJECT_DIR` exists only in

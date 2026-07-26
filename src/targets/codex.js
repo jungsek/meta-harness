@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { stringify as stringifyToml } from 'smol-toml'
 import { resolveEvents, resolveServers, wants } from '../model.js'
+import { toCodexRules } from '../permissions.js'
 
 const EVENTS = [
   'SessionStart',
@@ -96,6 +97,19 @@ export default {
           },
         },
       })
+
+    if (model.permissions) {
+      const rules = toCodexRules(model.permissions)
+      if (rules) {
+        out.push({ category: 'permissions', path: '.codex/rules/meta-harness.rules', content: rules })
+        // Verified against codex 0.145: project exec policies load only in a
+        // trusted directory. Untrusted, forbidden commands still run — so this
+        // is a silent no-op, which for a permission is worth stating loudly.
+        ctx.warnings.push(
+          'codex: .codex/rules/ exec policy only takes effect in a trusted directory — run `codex` once here and accept the trust prompt, or your deny rules will not be enforced'
+        )
+      }
+    }
 
     if (model.settings.codex)
       out.push({ category: 'settings', sharedFile: '.codex/config.toml', format: 'toml', data: model.settings.codex })

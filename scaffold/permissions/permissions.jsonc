@@ -1,0 +1,34 @@
+{
+  // Unified permissions — declared once, enforced in every runtime that can.
+  //
+  //   allow  never prompts
+  //   deny   refused outright
+  //   ask    prompts for approval
+  //
+  // Claude gets a `permissions` block in .claude/settings.json.
+  // Codex gets Starlark prefix_rules in .codex/rules/meta-harness.rules —
+  // its only per-command enforcement (approval_policy/sandbox_mode are coarser).
+  //
+  // A rule persuades; a permission enforces. For anything that genuinely
+  // matters, write both — a rule in rules/ AND an entry here.
+  "permission": {
+    // Shell commands. Patterns are matched as command prefixes.
+    "bash": {
+      "git status": "allow",
+      "git diff": "allow",
+      "rm -rf *": "deny"
+      // "*": "ask"        // uncomment to prompt for everything else
+    },
+
+    // File writes (Claude only — Codex exec policy is command-scoped).
+    "edit": {
+      // "src/**": "allow"
+    },
+
+    // File reads. Keep secrets denied.
+    "read": {
+      ".env": "deny",
+      ".env.*": "deny"
+    }
+  }
+}

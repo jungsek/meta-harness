@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0 — 2026-07-27
+
+- **Unified permissions** (`permissions/permissions.jsonc`) — `allow`/`deny`/
+  `ask` declared once, compiled to Claude's `permissions` block *and* Codex's
+  Starlark exec policy (`.codex/rules/meta-harness.rules`). This reverses a
+  ratified decision: Codex previously had no per-command enforcement at all,
+  only coarse `approval_policy`/`sandbox_mode`.
+  - Verified end to end against codex 0.145 — a `deny` yields
+    `decision = "forbidden"` and Codex refuses to run the command.
+  - **Codex loads project exec policies only in a trusted directory.**
+    Untrusted, a deny silently does not stop anything, so `generate` warns.
+  - Declaring permissions in both `permissions/` and `settings/` is a hard
+    error rather than a silent winner.
+- Fragment collisions now name both colliding sources instead of saying
+  "two sources".
+
 ## 0.8.0 — 2026-07-27
 
 - **Rules now reach Codex and Hermes.** Verified against the shipped Codex

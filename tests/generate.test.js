@@ -313,3 +313,51 @@ test('dropping the codex target strips the block but keeps the prose', () => {
   assert.match(md, /Keep me/, 'prose survives pruning')
   assert.ok(!md.includes('meta-harness:start'), 'block removed')
 })
+
+test('unified permissions compile to both Claude and Codex dialects', () => {
+  const root = fixture()
+  fs.mkdirSync(path.join(root, '.meta-harness/permissions'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/permissions/permissions.jsonc'),
+    JSON.stringify({ permission: { bash: { 'git status': 'allow', 'rm -rf *': 'deny' }, read: { '.env': 'deny' } } })
+  )
+  // the fixture's own settings must not also declare permissions
+  fs.writeFileSync(path.join(root, '.meta-harness/settings/claude.settings.jsonc'), '{}')
+  const res = generate(root)
+
+  const claude = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'))
+  assert.deepStrictEqual(claude.permissions.allow, ['Bash(git status)'])
+  assert.deepStrictEqual(claude.permissions.deny, ['Bash(rm -rf *)', 'Read(.env)'])
+
+  const starlark = fs.readFileSync(path.join(root, '.codex/rules/meta-harness.rules'), 'utf8')
+  assert.match(starlark, /pattern = \["rm", "-rf", "\*"\]/)
+  assert.match(starlark, /decision = "forbidden"/)
+  assert.ok(!starlark.includes('.env'), 'read rules are Claude-only; codex policy is command-scoped')
+
+  // Silent non-enforcement without directory trust is worth warning about.
+  assert.ok(res.warnings.some((w) => w.includes('trusted directory')))
+})
+
+test('rejects an invalid permission decision instead of guessing', () => {
+  const root = fixture()
+  fs.mkdirSync(path.join(root, '.meta-harness/permissions'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/permissions/permissions.jsonc'),
+    JSON.stringify({ permission: { bash: { ls: 'maybe' } } })
+  )
+  assert.throws(() => generate(root), /not allow, deny, or ask/)
+})
+
+test('fragment collision names both sources', () => {
+  const root = fixture()
+  fs.mkdirSync(path.join(root, '.meta-harness/permissions'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/permissions/permissions.jsonc'),
+    JSON.stringify({ permission: { read: { '.env': 'deny' } } })
+  )
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/settings/claude.settings.jsonc'),
+    JSON.stringify({ permissions: { deny: ['Read(something-else)'] } })
+  )
+  assert.throws(() => generate(root), /permissions\/ and settings\/|settings\/ and permissions\//)
+})
