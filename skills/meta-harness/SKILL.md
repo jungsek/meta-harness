@@ -1,58 +1,86 @@
 ---
 name: meta-harness
-description: Build, sync, and audit a coding-agent harness from one source directory — compiles to Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard. Use when the user asks to build/define/change their harness, sync or propagate agent config, edit rules/subagents/commands/hooks/MCP in one place, or check config drift.
+description: Build, change, and audit a project's coding-agent harness — the rules, subagents, slash commands, MCP servers, hooks, and permissions that configure Claude Code, Codex CLI, Cursor, OpenCode, Hermes, and .agents — from one source directory that compiles to all of them. Use this skill whenever someone wants to set up or change how agents behave in a repo: "build my harness", adding or editing rules/subagents/commands/hooks/MCP servers, making agents stop before risky operations, keeping .claude and .codex in sync, reviewing whether their agent config is any good, or fixing config drift — even if they never say "meta-harness" and even if they only name one tool ("add a Claude subagent", "set up Codex for this repo").
 ---
 
 # meta-harness
 
-One source directory compiles to every runtime's native config. You author the
-**source**; the CLI writes every **output**.
+meta-harness compiles one source directory into every coding agent's native
+config. You write the source; the CLI writes every output.
 
-- `<sourceDir>/` (default `.meta-harness/`) — the source of truth. Yours to write.
-- `.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json` — outputs. **Never hand-write these.** `generate` is the only thing that may; it refuses to overwrite hand edits, so it will catch you.
-- `HARNESS-REQUEST.md` in the source root — the user's plain-language *request*. Input only, never compiled, never a record of what exists.
+- **`<sourceDir>/`** (default `.meta-harness/`, set by `sourceDir` in `meta-harness.jsonc`) — the source of truth. Yours to edit.
+- **`.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json`** — compiled outputs. Editing these by hand is what the tool exists to prevent: `generate` refuses to overwrite hand edits, so a change made there blocks the next build instead of surviving it. Put the change in the source and it reaches every tool at once.
+- **`HARNESS-REQUEST.md`** in the source root — the user's plain-language request. Input only, never compiled.
 
-Run `meta-harness --help` for the CLI surface, `meta-harness explain
-<category>` for a file shape, and `meta-harness show` for what the harness
-currently contains. Don't guess at any of them — ask the tool.
+Three commands answer most questions, so ask the tool rather than guessing:
+`meta-harness --help` (the CLI surface), `meta-harness explain <category>`
+(the exact shape of a source file), `meta-harness show` (what this harness
+currently contains).
 
-## "Build my harness"
+## Building or changing a harness
 
-Three ways users start. All converge on the same middle.
+Users arrive three ways. All converge on the same middle.
 
-1. **Request file** — they wrote `HARNESS-REQUEST.md`; read it and build.
-2. **Straight ask** — "build my harness, targets claude and codex, agents stop before payments." Build from what they said; ask only what you can't reasonably default.
-3. **Interview** — they want guidance. Walk `references/interview.md`.
+1. **They wrote a request** — `HARNESS-REQUEST.md` exists. Read it and build.
+2. **They just asked** — "build my harness, claude and codex, agents stop before payments." Build from what they said, defaulting anything they clearly don't care about. A harness that exists beats one that was perfectly specified.
+3. **They want guidance** — walk them through `references/interview.md`.
 
-Then, always:
+Then, every time:
 
-1. Run `meta-harness show` and read the existing source files. Never assume an empty project.
-2. Write or update the category files. `meta-harness explain <category>` gives you the exact shape.
-3. `meta-harness generate --dry-run --json` — read the plan back. Confirm it matches intent *before* writing.
-4. `meta-harness generate`, then `meta-harness status`.
-5. Audit against `references/review.md` and tell the user about real gaps. Don't invent work.
-6. Report in their terms — "agents now stop before payments" — not as a list of file paths. `meta-harness show` is the shared view; point them at it rather than writing your own summary file.
+1. **Run `meta-harness show` and read the existing source files.** Projects are rarely empty, and overwriting a rule someone wrote is worse than adding nothing.
+2. **Write or update the category files.** `meta-harness explain <category>` prints the file location, frontmatter keys, an example, and where it compiles to — check it rather than guessing at frontmatter, since a wrong key fails silently at a target you may not be testing.
+3. **`meta-harness generate --dry-run --json`.** Read the plan back before committing to it. This is cheap and catches a misplaced file before it lands in six directories.
+4. **`meta-harness generate`, then `meta-harness status`.**
+5. **Audit against `references/review.md`** and mention what's genuinely missing. Report real gaps only — invented findings train the user to ignore you.
+6. **Report in their terms.** "Agents now stop before touching payments, on both Claude and Codex" tells them something; a list of eighteen file paths does not. Point at `meta-harness show` for the full picture.
 
-**Never write a file that summarizes the harness.** It would duplicate state
-and go stale the first time someone edits a rule. `show` derives the same view
-at read time and cannot be wrong. If `HARNESS-REQUEST.md` was used, say it has
-served its purpose and offer to delete it — never delete the user's prose
-unasked.
+Resist writing a file that summarizes the harness, however tempting. It
+duplicates state and goes stale the first time anyone edits a rule, whereas
+`show` derives the same view at read time and cannot be wrong. If
+`HARNESS-REQUEST.md` was used, say it has done its job and offer to delete it
+— but leave the user's prose alone unless they agree.
 
-## Boundaries
+## Worked example
 
-- Deterministic work belongs to the CLI. If a command can do it, run the command — never hand-produce its output.
-- Outside the compiler, and yours to handle: `AGENTS.md`/`CLAUDE.md` prose (hand-authored, read natively by every runtime), skills (`npx skills add <pkg>`), and telling the user to trust Codex hooks once interactively (new `.codex/hooks.json` entries silently do not run until they do).
-- `$CLAUDE_PROJECT_DIR` exists only in Claude hooks. Give other targets a per-target override with cwd-relative paths.
-- Shared files (`.claude/settings.json`, `.codex/config.toml`, `opencode.json`, `.cursor/mcp.json`) may hold keys meta-harness doesn't own. Leave them; they're preserved and never count as drift.
+**User:** "our agents keep running migrations without asking, make that stop"
+
+A good response writes `rules/safety.md` (stating the boundary in prose, which
+is what the agent actually reads) *and* adds a `permissions` deny entry to
+`settings/claude.settings.jsonc` (which enforces it even when the agent skims
+the rules), then runs `generate`. Rules persuade; permissions enforce. For
+anything that genuinely matters, do both — a rule alone is a suggestion.
+
+Then: "Migrations now need your approval — Claude will refuse the command
+outright, and both Claude and Codex have the rule in their instructions."
+
+## Working across the boundary
+
+Deterministic work belongs to the CLI. When a command produces something, run
+it instead of hand-producing its output — hand-written output is exactly what
+`generate` treats as drift.
+
+Some things sit outside the compiler and are yours to handle directly:
+
+- **`AGENTS.md` / `CLAUDE.md`** — hand-authored. Every runtime reads them natively, so generating them would shadow what the user wrote.
+- **Skills** — `npx skills add <package>` owns skill directories and `skills-lock.json`.
+- **Codex hook trust** — a new or changed `.codex/hooks.json` entry silently does not run until the user opens `codex` once and accepts the trust prompt. Tell them; you cannot do it for them.
+- **Anything in `~/`** — global config is deliberately out of scope.
+
+Two portability traps worth knowing: `$CLAUDE_PROJECT_DIR` exists only in
+Claude hooks, so give other targets a per-target override with cwd-relative
+paths; and shared files (`.claude/settings.json`, `.codex/config.toml`,
+`opencode.json`, `.cursor/mcp.json`) may hold keys meta-harness does not own,
+which are preserved and never count as drift — leave them alone.
 
 ## When generate refuses
 
-"refusing to overwrite hand-edited outputs" means an output was edited
-directly. Diff it, port the change into the source, then `generate --force`.
-Never `--force` without reading the diff first — you'd discard the user's work.
+"refusing to overwrite hand-edited outputs" means someone edited a compiled
+file directly. Diff it first to see what they were trying to achieve, port
+that into the source, then `generate --force`. Forcing without reading the
+diff discards their work silently, which is the one failure this tool was
+built to prevent.
 
 ## Reference
 
 - `references/interview.md` — questions for the guided path
-- `references/review.md` — gap and best-practice checklist
+- `references/review.md` — gap and best-practice checklist for audits

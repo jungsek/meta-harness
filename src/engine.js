@@ -49,7 +49,7 @@ function discover(root, cfg, { only, targetNames }) {
     throw new Error(`source validation failed:\n${errors.map((i) => `  ${i.file}: ${i.message}`).join('\n')}`)
   const warnings = model.issues.filter((i) => i.level === 'warn').map((i) => `${path.basename(i.file)}: ${i.message}`)
 
-  const ctx = { srcDir, warnings }
+  const ctx = { srcDir, root, warnings }
   let outputs = []
   for (const t of resolveTargets(targetNames)) outputs = outputs.concat(registry[t].emit(model, ctx))
   if (only) outputs = outputs.filter((o) => only.includes(o.category))

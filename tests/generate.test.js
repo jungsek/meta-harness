@@ -284,3 +284,11 @@ test('show reports the source contents, not the outputs', () => {
   assert.match(out, /planner/, 'lists subagents')
   assert.ok(!out.includes('.claude/'), 'must not list generated outputs')
 })
+
+test('warns when codex is enabled but no AGENTS.md carries the rules', () => {
+  const root = fixture()
+  const warned = () => generate(root).warnings.some((w) => w.includes('AGENTS.md'))
+  assert.ok(warned(), 'rules targeting codex with no AGENTS.md must warn')
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# project\n')
+  assert.ok(!warned(), 'warning must clear once AGENTS.md exists')
+})
