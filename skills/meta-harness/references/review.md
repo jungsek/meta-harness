@@ -27,7 +27,7 @@ in full is noise, and a harness doesn't need every row filled.
 - **Prose duplicated between `AGENTS.md` and `rules/`.** Two copies, one gets stale. Rules are compiled; AGENTS.md is read natively — pick per piece of content, don't mirror.
 - **A subagent whose prompt restates the project rules.** Rules already reach it; the prompt should say what makes this agent *different*.
 - **Targets with nothing to receive.** Enabling `hermes` with no subagents defined produces nothing.
-- **`HARNESS.md` describing something the source files don't implement.** Files win. Rewrite the doc.
+- **A checked-in file summarizing the harness.** It's already stale. `meta-harness show` derives the same view from the source.
 
 ## Reporting
 
