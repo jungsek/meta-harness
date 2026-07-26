@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 — 2026-07-27
+
+- `generate` now warns when `codex` is an enabled target, rules exist, and
+  there is no `AGENTS.md` at the project root. Codex reads rules only from
+  that file, so without it every rule silently misses the target — nothing
+  previously revealed that.
+- `status` distinguishes its advice: `MISSING` outputs just need a rebuild,
+  where only `EDITED` ones need `--force`. It previously told you to force in
+  both cases, which risks discarding work that was never at stake.
+- Skill rewritten against skill-authoring best practices: broader triggering
+  description, reasoning instead of bare prohibitions, and a worked example
+  covering the rule-plus-permission pattern.
+
 ## 0.6.0 — 2026-07-27
 
 - `meta-harness show` — what the harness contains, derived from the source
