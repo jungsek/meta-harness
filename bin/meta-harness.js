@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
 import { DEFAULT_TARGETS, generate, loadConfig, status } from '../src/engine.js'
+import { CATEGORIES, explain } from '../src/explain.js'
 import { targets as registry } from '../src/targets/index.js'
 
 const root = process.cwd()
@@ -122,6 +123,25 @@ function installSkill() {
 }
 
 program
+  .command('explain')
+  .argument('[category]', 'rules | agents | commands | workflows | connections | hooks | env | plugins | settings')
+  .description('print the source file shape for a category (what to write, and where it lands)')
+  .action((name) => {
+    if (!name) {
+      console.log('categories:')
+      for (const [k, c] of Object.entries(CATEGORIES)) console.log(`  ${bold(k.padEnd(12))} ${c.what}`)
+      console.log(`\n${dim('meta-harness explain <category> for the file shape')}`)
+      return
+    }
+    const text = explain(name, bold)
+    if (!text) {
+      console.error(red(`unknown category "${name}" (known: ${Object.keys(CATEGORIES).join(' ')})`))
+      process.exit(1)
+    }
+    console.log(text)
+  })
+
+program
   .command('init')
   .description('scaffold the source dir + config, install the agent skill (idempotent)')
   .option('--no-skill', 'skip installing the agent skill (no network calls)')
@@ -153,10 +173,14 @@ program
       console.warn(yellow('warn: could not install the agent skill — run it yourself:\n      npx skills add jungsek/meta-harness'))
 
     console.log(
-      `\n${bold('next — pick either path:')}\n` +
-        `  ${bold('by hand')}   edit ${cfg.sourceDir}/ (every file is a commented example), then: meta-harness generate\n` +
-        `  ${bold('by agent')}  describe the harness you want in ${cfg.sourceDir}/HARNESS.md,\n` +
-        `             then ask Claude or Codex: "build my harness"${skilled ? '' : dim(' (needs the skill above)')}`
+      `\n${bold('next — pick a path:')}\n\n` +
+        `  ${bold('by hand')}\n` +
+        `    edit ${cfg.sourceDir}/ (every file is a commented example), then: meta-harness generate\n\n` +
+        `  ${bold('by agent')}${skilled ? '' : dim('  (needs the skill above)')}\n` +
+        `    ask any coding agent: "build my harness"\n` +
+        `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
+        `    ...or write ${cfg.sourceDir}/HARNESS.md first and let it build from that\n` +
+        `    ...or ask it to interview you if you'd rather be walked through it\n`
     )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))
       console.log(

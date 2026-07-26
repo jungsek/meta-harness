@@ -1,80 +1,57 @@
 ---
 name: meta-harness
-description: Compile a single source-of-truth directory into native project config for Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard. Use when the user asks to sync, propagate, or regenerate agent/harness config, edit rules/agents/commands/hooks/MCP in one place, or check config drift.
+description: Build, sync, and audit a coding-agent harness from one source directory — compiles to Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard. Use when the user asks to build/define/change their harness, sync or propagate agent config, edit rules/subagents/commands/hooks/MCP in one place, or check config drift.
 ---
 
 # meta-harness
 
-One-way config compiler. Source of truth lives in one directory (default
-`.meta-harness/`, configurable via `sourceDir` in `meta-harness.jsonc`);
-`generate` compiles it to native config for each enabled target.
+One source directory compiles to every runtime's native config. You author the
+**source**; the CLI writes every **output**.
 
-## Commands
+- `<sourceDir>/` (default `.meta-harness/`) — the source of truth. Yours to write.
+- `.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json` — outputs. **Never hand-write these.** `generate` is the only thing that may; it refuses to overwrite hand edits, so it will catch you.
+- `HARNESS.md` in the source root — plain-language spec. Never compiled. Rough intent going in, accurate record coming out.
 
-```
-meta-harness init               # scaffold source dir + config
-meta-harness generate           # compile all enabled targets
-meta-harness generate --check   # drift gate: exit 1 if stale or hand-edited
-meta-harness generate --force   # discard hand edits to generated outputs
-meta-harness generate -t cursor --only rules,agents   # partial run (no pruning)
-meta-harness status [--json]    # per-output: clean / EDITED / MISSING / link
-meta-harness targets            # list supported targets
-```
+Run `meta-harness --help` for the CLI surface and `meta-harness explain
+<category>` for a file shape. Don't guess at either — ask the tool.
 
-Not installed globally? Prefix with `npx @jungsek/meta-harness` (avoids adding
-package.json/node_modules to the project).
+## "Build my harness"
 
-## Building a harness from a natural-language spec
+Three ways users start. All converge on the same middle.
 
-When the user says "build my harness" (or edits `<sourceDir>/HARNESS.md` and
-asks you to apply it):
+1. **Spec first** — they wrote `HARNESS.md`; read it and build.
+2. **Straight request** — "build my harness, targets claude and codex, agents stop before payments." Build from what they said; ask only what you can't reasonably default.
+3. **Interview** — they want guidance. Walk `references/interview.md`.
 
-1. Read `<sourceDir>/HARNESS.md` — plain-language intent, never compiled — and
-   the category files that already exist.
-2. Write or update the category files to match that intent. Match the shape of
-   the commented scaffold examples already in each directory.
-3. `meta-harness generate --dry-run --json` — read the plan back and check it
-   matches what you intended before writing anything.
+Then, always:
+
+1. Read `HARNESS.md` (if present) and every existing source file. Never assume an empty project.
+2. Write or update the category files. `meta-harness explain <category>` gives you the exact shape.
+3. `meta-harness generate --dry-run --json` — read the plan back. Confirm it matches intent *before* writing.
 4. `meta-harness generate`, then `meta-harness status`.
-5. Report what changed in the user's terms, not in file paths.
+5. Rewrite `HARNESS.md` to describe what now exists, in the format in `references/harness-format.md`.
+6. Audit against `references/review.md` and tell the user about real gaps. Don't invent work.
+7. Report in their terms — "agents now stop before payments" — not as a list of file paths.
 
-You author the **source**. The CLI writes every output. Never hand-write a file
-under `.claude/`, `.codex/`, `.cursor/`, `.opencode/`, `.agents/`, `.hermes/`,
-`.mcp.json`, or `opencode.json` — `generate` is the only thing that may.
+Step 5 matters: `HARNESS.md` is documentation *derived from* the source files,
+not a second source of truth. Source files are authoritative; if the two
+disagree, the files win and `HARNESS.md` gets rewritten.
 
-Things the compiler does not own, which you may still need to do for the user:
-`AGENTS.md`/`CLAUDE.md` prose (hand-authored), skills (`npx skills add <pkg>`),
-and telling them to trust Codex hooks once interactively.
+## Boundaries
 
-## Operating rules for agents
+- Deterministic work belongs to the CLI. If a command can do it, run the command — never hand-produce its output.
+- Outside the compiler, and yours to handle: `AGENTS.md`/`CLAUDE.md` prose (hand-authored, read natively by every runtime), skills (`npx skills add <pkg>`), and telling the user to trust Codex hooks once interactively (new `.codex/hooks.json` entries silently do not run until they do).
+- `$CLAUDE_PROJECT_DIR` exists only in Claude hooks. Give other targets a per-target override with cwd-relative paths.
+- Shared files (`.claude/settings.json`, `.codex/config.toml`, `opencode.json`, `.cursor/mcp.json`) may hold keys meta-harness doesn't own. Leave them; they're preserved and never count as drift.
 
-1. **Edit the source, never the outputs.** `.claude/`, `.codex/`, `.cursor/`,
-   `.opencode/`, `.agents/`, `.hermes/`, `.mcp.json`, `opencode.json` files it
-   generates are outputs — change `.meta-harness/` (or the configured
-   `sourceDir`) and run `generate`.
-2. `generate` aborting with "hand-edited outputs" means someone changed an
-   output directly. Diff it, port the change into the source, then
-   `generate --force`.
-3. Shared files (`.claude/settings.json`, `.codex/config.toml`,
-   `opencode.json`, `.cursor/mcp.json`) may contain keys meta-harness does not
-   own — leave those alone; they're preserved across generates.
-4. Hook events are canonical PascalCase in Claude-shaped entries
-   (`hooks/hooks.jsonc`). A warning that an event was skipped for a target is
-   expected behavior, not an error.
-   - Codex: new/changed `.codex/hooks.json` entries silently DON'T run until
-     trusted once interactively (open `codex` in the project, accept "Trust
-     all and continue"). After that they fire headless too.
-   - `$CLAUDE_PROJECT_DIR` only exists in Claude hooks — give codex (and
-     others) a per-target override with cwd-relative paths.
-5. Per-file `targets: ["..."]` frontmatter controls which targets receive a
-   rule/agent/command. Agent files take per-target override blocks
-   (`claude:`, `cursor:`, …).
-6. MCP per-target overrides: same-named server replaces wholesale, `null`
-   deletes it for that target.
-7. Run `generate --check` in CI or before committing to catch drift.
+## When generate refuses
 
-## Source layout
+"refusing to overwrite hand-edited outputs" means an output was edited
+directly. Diff it, port the change into the source, then `generate --force`.
+Never `--force` without reading the diff first — you'd discard the user's work.
 
-rules/ agents/ commands/ workflows/ connections/mcp.jsonc env/env.jsonc
-hooks/hooks.jsonc plugins/plugins.jsonc settings/{claude.settings.jsonc,
-codex.config.toml} — see README.md for the full output matrix.
+## Reference
+
+- `references/harness-format.md` — the HARNESS.md format
+- `references/interview.md` — questions for the guided path
+- `references/review.md` — gap and best-practice checklist
