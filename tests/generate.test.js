@@ -298,6 +298,19 @@ test('explain covers every category the loader reads', () => {
   })
   for (const c of ['rules', 'agents', 'commands', 'connections', 'hooks', 'env', 'plugins', 'permissions', 'settings'])
     assert.match(out, new RegExp(c), `explain must list ${c}`)
+  for (const t of ['claude', 'codex', 'cursor', 'opencode', 'hermes']) assert.match(out, new RegExp(t))
+})
+
+test('explain <target> prints surfaces, nuances, and verified version', () => {
+  const bin = path.resolve(import.meta.dirname, '../bin/meta-harness.js')
+  const out = execFileSync('node', [bin, 'explain', 'codex'], { encoding: 'utf8' })
+  assert.match(out, /verified: codex-cli 0\.145\.0/)
+  assert.match(out, /AGENTS\.md block/)
+  assert.match(out, /directory trust/)
+  assert.match(out, /developers\.openai\.com/)
+  // 'agents' is both category and target — category wins
+  const cat = execFileSync('node', [bin, 'explain', 'agents'], { encoding: 'utf8' })
+  assert.match(cat, /Subagent definitions/)
 })
 
 test('show reports the source contents, not the outputs', () => {
