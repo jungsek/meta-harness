@@ -5,13 +5,14 @@ export const CATEGORIES = {
   rules: {
     where: '<sourceDir>/rules/*.md',
     what: 'Policy and identity prose the agents must follow.',
-    frontmatter: 'description (string), targets (array, default ["*"]), globs/paths (array, cursor scoping), root (bool — leads the AGENTS.md block; use it for identity)',
+    frontmatter:
+      'description (string), targets (array, default ["*"] — decides inclusion only; AGENTS.md is shared), root (bool — leads the AGENTS.md block; use it for identity). paths:/globs: rejected — rules load unconditionally.',
     example: `---
 description: Safety floor — protected domains and secrets
 ---
 # Safety
 Stop for human review: migrations, auth, payments, API contracts, CI config.`,
-    goes: 'claude (symlink), agents, cursor (.mdc), opencode (+ instructions[]), codex (.codex/harness-rules.md — path-scoped rules skipped there)',
+    goes: 'one managed block in AGENTS.md — read natively by codex, cursor, opencode, hermes, .agents; Claude reads it through a generated CLAUDE.md @AGENTS.md stub',
   },
   agents: {
     where: '<sourceDir>/agents/*.md',

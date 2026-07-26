@@ -54,7 +54,7 @@ function discover(root, cfg, { only, targetNames }) {
   const enabled = resolveTargets(targetNames)
   let outputs = []
   for (const t of enabled) outputs = outputs.concat(registry[t].emit(model, ctx))
-  outputs = outputs.concat(emitAgentsMd(model, enabled, warnings))
+  outputs = outputs.concat(emitAgentsMd(model, enabled, ctx))
   if (only) outputs = outputs.filter((o) => only.includes(o.category))
 
   // Assemble shared files (settings.json / config.toml / opencode.json …)
@@ -249,7 +249,12 @@ export function generate(root, { check = false, force = false, only = null, targ
           }
         }
       } else if (fs.existsSync(abs) || isLink(abs)) {
-        if (!check) fs.rmSync(abs)
+        if (!check) {
+          fs.rmSync(abs)
+          try {
+            fs.rmdirSync(path.dirname(abs)) // only succeeds when empty
+          } catch {}
+        }
         result.pruned.push(rel)
       }
     }

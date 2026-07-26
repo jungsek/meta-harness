@@ -18,7 +18,7 @@ const readJson = (root, rel) => JSON.parse(read(root, rel))
 function fixture({ targets = '["claude", "codex"]' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-'))
   write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ${targets} }`)
-  write(root, '.meta-harness/rules/style.md', '---\npaths: ["**/*.ts"]\ndescription: TS style\n---\nUse 2-space indent.\n')
+  write(root, '.meta-harness/rules/style.md', '---\ndescription: TS style\n---\nUse 2-space indent.\n')
   write(
     root,
     '.meta-harness/agents/planner.md',
@@ -57,8 +57,14 @@ test('claude + codex output matrix', () => {
   const root = fixture()
   const res = generate(root)
 
-  for (const p of ['.claude/rules/style.md', '.claude/commands/ship.md'])
-    assert.ok(fs.lstatSync(path.join(root, p)).isSymbolicLink(), `${p} is symlink`)
+  assert.ok(fs.lstatSync(path.join(root, '.claude/commands/ship.md')).isSymbolicLink(), 'command is symlink')
+
+  // rules: one AGENTS.md block + a CLAUDE.md import stub, no per-target rule files
+  assert.match(read(root, 'AGENTS.md'), /2-space indent/)
+  const stub = read(root, 'CLAUDE.md')
+  assert.match(stub, /@AGENTS\.md/)
+  assert.ok(!fs.lstatSync(path.join(root, 'CLAUDE.md')).isSymbolicLink(), 'stub is a real file, never a symlink')
+  assert.ok(!fs.existsSync(path.join(root, '.claude/rules')), 'no .claude/rules emitted')
 
   const claudeAgent = read(root, '.claude/agents/planner.md')
   assert.match(claudeAgent, /model: inherit/)
@@ -93,11 +99,8 @@ test('cursor / opencode / agents / hermes targets', () => {
   const root = fixture({ targets: '["*"]' })
   generate(root)
 
-  // cursor
-  const mdc = read(root, '.cursor/rules/style.mdc')
-  assert.match(mdc, /description: TS style/)
-  assert.match(mdc, /globs: \*\*\/\*\.ts/)
-  assert.ok(!mdc.includes('alwaysApply'), 'globs present → no alwaysApply default')
+  // cursor — rules come via AGENTS.md, not .mdc files
+  assert.ok(!fs.existsSync(path.join(root, '.cursor/rules')), 'no .cursor/rules emitted')
   const cursorMcp = readJson(root, '.cursor/mcp.json')
   assert.strictEqual(cursorMcp.mcpServers.files.env.KEY, '${env:SECRET}')
   const cursorHooks = readJson(root, '.cursor/hooks.json')
@@ -110,9 +113,10 @@ test('cursor / opencode / agents / hermes targets', () => {
   assert.ok(read(root, '.cursor/agents/planner.md').includes('name: planner'))
   assert.ok(read(root, '.cursor/commands/ship.md').includes('description: ship it'))
 
-  // opencode
+  // opencode — no memories/instructions; rules come via AGENTS.md
   const oc = readJson(root, 'opencode.json')
-  assert.deepStrictEqual(oc.instructions, ['.opencode/memories/style.md'])
+  assert.ok(!oc.instructions, 'no instructions key')
+  assert.ok(!fs.existsSync(path.join(root, '.opencode/memories')), 'no memories emitted')
   assert.strictEqual(oc.mcp.deepwiki.type, 'remote')
   assert.strictEqual(oc.mcp.files.type, 'local')
   assert.deepStrictEqual(oc.mcp.files.command, ['npx', '-y', 'server-fs'])
@@ -122,10 +126,9 @@ test('cursor / opencode / agents / hermes targets', () => {
   assert.match(plugin, /"tool.execute.after": async \(input\)/)
   assert.match(plugin, /new RegExp\("Write\|Edit"\)\.test\(input\.tool\)/)
   assert.ok(!plugin.includes('bye.sh'), 'SessionEnd has no opencode equivalent')
-  assert.ok(!read(root, '.opencode/memories/style.md').includes('---'), 'frontmatter stripped from memories')
 
-  // agents
-  assert.ok(read(root, '.agents/memories/style.md').includes('2-space'))
+  // agents — no memories; rules come via AGENTS.md
+  assert.ok(!fs.existsSync(path.join(root, '.agents/memories')), 'no .agents/memories emitted')
   assert.ok(read(root, '.agents/subagents/planner.md').includes('name: planner'))
   assert.ok(read(root, '.agents/commands/ship.md').includes('ship it'))
 
@@ -232,10 +235,31 @@ test('--targets partial run does not prune other targets', () => {
 })
 
 test('per-file targets frontmatter filters outputs', () => {
-  const root = fixture()
-  write(root, '.meta-harness/rules/codex-only.md', '---\ntargets: ["codex"]\n---\nnope\n')
+  const root = fixture({ targets: '["claude"]' })
+  write(root, '.meta-harness/agents/codex-only.md', '---\ndescription: d\ntargets: ["codex"]\n---\nnope\n')
   generate(root)
-  assert.ok(!fs.existsSync(path.join(root, '.claude/rules/codex-only.md')))
+  assert.ok(!fs.existsSync(path.join(root, '.claude/agents/codex-only.md')))
+})
+
+test('narrowed rule targets: included when a listed target is enabled, with a shared-file warning', () => {
+  const root = fixture()
+  write(root, '.meta-harness/rules/codex-only.md', '---\ntargets: ["codex"]\n---\ncodex prose\n')
+  const res = generate(root)
+  assert.match(read(root, 'AGENTS.md'), /codex prose/, 'rule lands in the shared block')
+  assert.ok(res.warnings.some((w) => w.includes('narrows targets')))
+})
+
+test('path-scoped rules are rejected', () => {
+  const root = fixture()
+  write(root, '.meta-harness/rules/scoped.md', '---\npaths: ["**/*.ts"]\n---\nbody\n')
+  assert.throws(() => generate(root), /paths:\/globs: is not supported/)
+})
+
+test('CLAUDE.md that already imports AGENTS.md is left alone', () => {
+  const root = fixture()
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# Mine\n\n@AGENTS.md\n')
+  generate(root)
+  assert.strictEqual(read(root, 'CLAUDE.md'), '# Mine\n\n@AGENTS.md\n')
 })
 
 test('CLI end-to-end: generate, status, targets, --json', () => {
@@ -336,21 +360,19 @@ test('fragment collision names both sources', () => {
   assert.throws(() => generate(root), /permissions\/ and settings\/|settings\/ and permissions\//)
 })
 
-test('rules reach codex via a managed AGENTS.md block, preserving user prose', () => {
+test('rules land in a managed AGENTS.md block, preserving user prose; root rule leads', () => {
   const root = fixture()
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nProse I wrote.\n')
   fs.writeFileSync(
     path.join(root, '.meta-harness/rules/identity.md'),
     '---\ndescription: d\nroot: true\n---\n\n# Identity\n'
   )
-  const res = generate(root)
+  generate(root)
   const md = () => fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
 
   assert.match(md(), /Prose I wrote/, 'user prose survives')
   assert.match(md(), /# Identity/, 'rules land in the managed block')
-  // AGENTS.md loads unconditionally, so a path-scoped rule must not be promoted
-  assert.ok(!md().includes('2-space indent'), 'path-scoped rules stay out')
-  assert.ok(res.warnings.some((w) => w.includes('path-scoped')), 'and the skip is announced')
+  assert.ok(md().indexOf('# Identity') < md().indexOf('2-space indent'), 'root: true leads the block')
 
   // prose edits outside the block are the user's business, not drift
   fs.appendFileSync(path.join(root, 'AGENTS.md'), '\nMore prose.\n')

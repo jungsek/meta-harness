@@ -37,7 +37,7 @@ Everything lives under the source dir (default `.meta-harness/`).
 
 | Category | File | What it is |
 |---|---|---|
-| rules | `rules/*.md` | Policy and identity prose. `root: true` leads the Codex doc; `paths:` scopes a rule to matching files (Claude/Cursor only). |
+| rules | `rules/*.md` | Policy and identity prose. `root: true` leads the AGENTS.md block. `paths:`/`globs:` is an error — rules load unconditionally. |
 | agents | `agents/*.md` | Subagents. Body is the system prompt. |
 | commands | `commands/*.md` | Slash commands. |
 | connections | `connections/mcp.jsonc` | MCP servers, Claude-shaped, per-target overrides. |
@@ -56,11 +56,11 @@ additionally take per-target override blocks (`claude:`, `cursor:`, `hermes:`).
 
 ## The six targets, and what each gets
 
-Running with `targets: ["*"]` on a scaffolded project produces 22 files:
+Running with `targets: ["*"]` on a scaffolded project produces 20 files:
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
-| rules | `.claude/rules/` (symlink) | `AGENTS.md` block ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | `AGENTS.md` block ¹ |
+| rules | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
 | agents | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/` | JSON specs + Python plugin |
 | commands | `.claude/commands/` (symlink) | — global-only | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — global-only |
 | connections | `.mcp.json` | `[mcp_servers]` in config.toml | `.cursor/mcp.json` | `opencode.json` | — | — global-only |
@@ -70,12 +70,15 @@ Running with `targets: ["*"]` on a scaffolded project produces 22 files:
 | permissions | `permissions` block | `.codex/rules/*.rules` (Starlark) | — | — | — | — |
 | settings | rest of settings.json | rest of config.toml | — | — | — | — |
 
-¹ A marker-delimited block in `AGENTS.md`; everything outside it is yours and
-never counts as drift. Measured against codex 0.145: the `AGENTS.md` family
+¹ One prose channel: a marker-delimited block in `AGENTS.md`; everything
+outside it is yours and never counts as drift. Codex, Cursor, OpenCode,
+Hermes, and `.agents` runtimes read `AGENTS.md` natively. Claude Code doesn't,
+so it gets a generated `CLAUDE.md` containing `@AGENTS.md` — a real file,
+never a symlink; a `CLAUDE.md` that already imports `AGENTS.md` is left
+alone. Measured against codex 0.145: the `AGENTS.md` family
 only ever *replaces* (`AGENTS.override.md` > `AGENTS.md` > `.codex/AGENTS.md`),
 and `project_doc_fallback_filenames` loads only when `AGENTS.md` is absent —
-so a managed block is the one additive prose channel. Path-scoped rules are
-skipped and warned about, since `AGENTS.md` loads unconditionally.
+so a managed block is the one additive prose channel.
 
 Each target owns its dialect translation — field renames, env-ref syntax
 (`${VAR}` vs `${env:VAR}` vs `{env:VAR}`), event-name mapping, `disabled` vs
@@ -86,16 +89,16 @@ Each target owns its dialect translation — field renames, env-ref syntax
 This is the part worth understanding, because it determines what counts as
 "yours" versus "the tool's".
 
-1. **Symlink** — when the bytes are identical to the source (Claude rules and
+1. **Symlink** — when the bytes are identical to the source (Claude
    commands). Relative, survives clone. Edit the source and the output is
    already updated.
-2. **Generated file** — when encoding differs (Codex `.toml`, Cursor `.mdc`,
-   the OpenCode hooks plugin, Hermes specs). Whole file is owned; the whole
+2. **Generated file** — when encoding differs (Codex `.toml`, the OpenCode
+   hooks plugin, Hermes specs). Whole file is owned; the whole
    file is hashed.
-3. **Marker block** — `AGENTS.md` only. meta-harness owns the region between
-   `<!-- meta-harness:start -->` and `<!-- meta-harness:end -->`; everything
-   around it is yours. Drop the Codex/Hermes targets and the block goes while
-   your prose stays.
+3. **Marker block** — `AGENTS.md` and the `CLAUDE.md` stub. meta-harness owns
+   the region between `<!-- meta-harness:start -->` and
+   `<!-- meta-harness:end -->`; everything around it is yours. Delete every
+   rule and the blocks go while your prose stays.
 4. **Shared-file fragment** — several categories merge into one file
    (`.claude/settings.json` takes env + hooks + plugins + permissions +
    settings). **Only the keys meta-harness produces are owned**; anything else
@@ -146,7 +149,8 @@ the agent honest.
 
 - **Skills** — `npx skills add` owns skill dirs and `skills-lock.json`.
 - **Anything in `~/`** — global runtime config is hand-managed.
-- **`CLAUDE.md`** — never written. (`AGENTS.md` is only *partly* managed: one block.)
+- **Wholesale identity files** — `AGENTS.md` and `CLAUDE.md` are only *partly*
+  managed: one marker block each, the rest stays yours.
 - **Orchestration** — agent-team briefs are prose, nothing to compile.
 - **`import`** — reverse direction, specced in `import-spec.md`, not built.
   This is the current biggest gap: an existing `.claude/`+`.codex/` setup has

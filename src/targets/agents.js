@@ -3,21 +3,13 @@ import matter from 'gray-matter'
 import { wants } from '../model.js'
 
 // The .agents/ directory (AGENTS.md ecosystem / Agent Skills standard layout).
-// AGENTS.md itself stays hand-authored (identity file, out of tool scope) —
-// reference .agents/memories/ from it yourself. Skills are owned by
-// `npx skills add`, never touched here.
+// Rules reach these runtimes via AGENTS.md itself (agentsmd.js). Skills are
+// owned by `npx skills add`, never touched here.
 
 export default {
   name: 'agents',
   emit(model) {
     const out = []
-
-    for (const r of model.rules.filter((r) => wants(r, 'agents')))
-      out.push({
-        category: 'rules',
-        path: path.join('.agents/memories', path.basename(r.file)),
-        content: r.body + '\n',
-      })
 
     for (const c of model.commands.filter((c) => wants(c, 'agents')))
       out.push({

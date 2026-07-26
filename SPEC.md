@@ -22,16 +22,27 @@ npm-published CLI. All ratified decisions below still stand.
   hand-managed, out of scope.
 - **Outputs are committed.** Generated config is part of the repo; the
   manifest makes "these files are outputs" enforceable in CI.
-- **Identity files stay the user's.** `CLAUDE.md` is never written. `AGENTS.md`
-  is never written *wholesale* — meta-harness owns one marker-delimited block
-  (the only additive prose channel to Codex and Hermes) and preserves
-  everything around it verbatim.
+- **Identity files stay the user's.** `AGENTS.md` and `CLAUDE.md` are never
+  written *wholesale* — meta-harness owns one marker-delimited block in each
+  (`AGENTS.md` carries the rules; `CLAUDE.md` carries only the `@AGENTS.md`
+  import Claude needs) and preserves everything around it verbatim. A
+  `CLAUDE.md` that already imports `AGENTS.md` is left untouched.
 - **Own the encoding matrix.** Six targets × ~7 categories is small enough
   to maintain directly; correctness of each dialect beats breadth of tools.
 
 ## 2. Target scope decisions [ratified]
 
-- **claude**: rules/commands symlinked (`.claude/rules|commands/`),
+- **rules (all targets, 2026-07-27)**: one channel — the managed `AGENTS.md`
+  block. Codex, Cursor, OpenCode, Hermes, and `.agents` runtimes read
+  `AGENTS.md` natively; Claude gets a generated `CLAUDE.md` stub containing
+  `@AGENTS.md` (real file, never a symlink — Claude refuses to write through
+  a symlinked `CLAUDE.md`). No per-target rules dirs (`.claude/rules/`,
+  `.cursor/rules/*.mdc`, `.opencode/memories/`, `.agents/memories/`) — they
+  duplicated the same prose into every runtime, and Claude received it twice
+  (rules dir + import). `paths:`/`globs:` on a rule is a hard error:
+  `AGENTS.md` loads unconditionally, so path scoping cannot be honored.
+  A rule's `targets:` only decides inclusion (warned as shared).
+- **claude**: commands symlinked (`.claude/commands/`),
   agents generated (`.claude/agents/*.md`), `.mcp.json`,
   env + hooks + plugins + settings fragments → `.claude/settings.json`.
 - **codex**: agents → `.codex/agents/*.toml` (`developer_instructions`
@@ -39,28 +50,25 @@ npm-published CLI. All ratified decisions below still stand.
   dialect translation (field renames, `type` dropped, `disabled`→`enabled`,
   name charset check, empty-table stripping); hooks → `.codex/hooks.json`
   (NOT `[hooks]` in config.toml); env → `[shell_environment_policy]`;
-  settings → rest of config.toml. Rules reach Codex through the managed
-  `AGENTS.md` block (below); commands are global-only, skipped.
-- **cursor**: rules → `.cursor/rules/*.mdc` (hand-rolled frontmatter:
-  unquoted comma-joined globs; `alwaysApply: true` default when no globs),
-  commands, agents, `.cursor/mcp.json` (shared file, `${VAR}`→`${env:VAR}`),
-  native `.cursor/hooks.json` (camelCase events, flat defs).
-- **opencode**: rules → `.opencode/memories/` + registered in `opencode.json
-  instructions[]`; commands; agents (`mode: subagent` default); MCP →
+  settings → rest of config.toml. Commands are global-only, skipped.
+- **cursor**: commands, agents, `.cursor/mcp.json` (shared file,
+  `${VAR}`→`${env:VAR}`), native `.cursor/hooks.json` (camelCase events,
+  flat defs).
+- **opencode**: commands; agents (`mode: subagent` default); MCP →
   `opencode.json` `mcp`+`tools` (local/remote types, command array,
   `environment`, `{env:VAR}` refs); hooks → generated
   `.opencode/plugins/meta-harness-hooks.js` (no native hooks file exists).
-  `opencode.json` is a shared file: owned keys `instructions`, `mcp`,
-  `tools`; foreign keys preserved.
-- **agents** (`.agents/` standard): rules → `.agents/memories/`, commands →
-  `.agents/commands/`, agents → `.agents/subagents/`. Skills stay with
-  `npx skills add`.
-- **hermes**: subagents, plus rules via the shared AGENTS.md block. Otherwise (`.hermes/meta-harness/
+  `opencode.json` is a shared file: owned keys `mcp`, `tools`; foreign keys
+  preserved.
+- **agents** (`.agents/` standard): commands → `.agents/commands/`, agents →
+  `.agents/subagents/`. Skills stay with `npx skills add`. (Codex reads only
+  `.agents/skills/` and `.agents/plugins/marketplace.json` from this tree —
+  verified codex 0.145.)
+- **hermes**: subagents only (`.hermes/meta-harness/
   subagents/*.json` specs + `.hermes/plugins/meta-harness-subagents/`
   Python plugin registering each as a `delegate_task` command). MCP/hooks/
   permissions/commands live in `~/.hermes/config.yaml` — global, out of
-  scope. Rules deliberately not folded into `.hermes.md`: it would shadow
-  the hand-authored AGENTS.md, which Hermes reads natively.
+  scope. Hermes reads the shared AGENTS.md natively.
 - Canonical hook events are PascalCase (both major runtimes native);
   per-target maps translate (cursor camelCase, opencode event ids).
 
@@ -117,8 +125,9 @@ hermes:
 ## 5. Output matrix
 
 See README.md for the full 6-target matrix. Modes: `symlink` when bytes are
-identical (claude rules/commands/workflows), `generate` when encoding
-differs. Symlinks are relative, survive clone.
+identical (claude commands), `generate` when encoding differs. Symlinks are
+relative, survive clone. `CLAUDE.md` is always a generated stub, never a
+symlink.
 
 **Shared-file assembly:** `.claude/settings.json`, `.codex/config.toml`,
 `opencode.json`, and `.cursor/mcp.json` are each assembled from multiple
@@ -194,7 +203,10 @@ meta-harness show                    # what the harness contains, derived from s
 1. Source dir default `.meta-harness/`; jung-os config sets
    `sourceDir: ".harness"`. npm name `@jungsek/meta-harness` (unscoped
    blocked by registry name-similarity rule); bin command `meta-harness`.
-2. rules/ → native rules dirs. `.claude/rules/` confirmed in official docs
+2. ~~rules/ → native rules dirs.~~ **Superseded 2026-07-27 (see §2 rules
+   entry):** all native rules dirs dropped; AGENTS.md block is the single
+   prose channel, Claude via generated `CLAUDE.md` stub. Original finding
+   stands: `.claude/rules/` confirmed in official docs
    (recursive, `paths:` frontmatter globs, symlinks OK). **Corrected
    2026-07-27:** `.codex/rules/*.rules` is Starlark *exec policy*
    (`prefix_rule`, `decision="allow"`) parsed by `codex_execpolicy`, not

@@ -24,7 +24,7 @@ in full is noise, and a harness doesn't need every row filled.
 - **A rule that contradicts a permission.** The permission wins silently. Say so.
 - **`env/env.jsonc` holding a token or key.** It's committed. Move it out.
 - **Hooks using `$CLAUDE_PROJECT_DIR` without a per-target override.** Dead on every non-Claude target.
-- **Prose duplicated between `AGENTS.md` and `rules/`.** Two copies, one gets stale. Rules are compiled; AGENTS.md is read natively — pick per piece of content, don't mirror.
+- **Prose duplicated between hand-written `AGENTS.md` sections and `rules/`.** Two copies, one gets stale. Rules compile into the managed AGENTS.md block — content belongs in `rules/` or in the user's own prose, never both.
 - **A subagent whose prompt restates the project rules.** Rules already reach it; the prompt should say what makes this agent *different*.
 - **Targets with nothing to receive.** Enabling `hermes` with no subagents defined produces nothing.
 - **A checked-in file summarizing the harness.** It's already stale. `meta-harness show` derives the same view from the source.

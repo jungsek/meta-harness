@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.11.0 — 2026-07-27
+
+- **One prose channel: rules compile only into the managed `AGENTS.md` block.**
+  All per-target rules outputs are gone — `.claude/rules/` symlinks,
+  `.cursor/rules/*.mdc`, `.opencode/memories/` (+ `instructions[]`),
+  `.agents/memories/`. They duplicated the same prose into every runtime, and
+  Claude received it twice (rules dir + `@AGENTS.md` import). Codex, Cursor,
+  OpenCode, Hermes, and `.agents` runtimes read `AGENTS.md` natively; upgrade
+  is automatic — the next `generate` prunes the old outputs.
+- **Claude reads rules through a generated `CLAUDE.md` stub.** A managed
+  marker block containing `@AGENTS.md` — a real file, never a symlink (Claude
+  refuses to write through a symlinked `CLAUDE.md`). A `CLAUDE.md` that
+  already imports `AGENTS.md` is left untouched, and prose outside the block
+  stays yours.
+- **`paths:`/`globs:` on a rule is now a hard error** (was: skipped with a
+  warning for the block, honored by Claude/Cursor). `AGENTS.md` loads
+  unconditionally, so there is no conditional-load channel left; scope by
+  prose instead.
+- A rule that narrows `targets:` still lands in the shared block when any
+  listed target is enabled, with a warning that every runtime will read it.
+- Prune now removes directories its deletions leave empty.
+
 ## 0.10.2 — 2026-07-27
 
 - **Fixes silent data loss on first adoption.** `detectDrift` only ever

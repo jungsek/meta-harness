@@ -88,22 +88,8 @@ export default {
   name: 'opencode',
   emit(model, ctx) {
     const out = []
-    const memories = []
 
-    // AGENTS.md stays hand-authored; opencode reads it natively. Non-root rules
-    // go to .opencode/memories/ and are registered in opencode.json instructions.
-    for (const r of model.rules.filter((r) => wants(r, 'opencode'))) {
-      const rel = path.join('.opencode/memories', path.basename(r.file))
-      memories.push(rel)
-      out.push({ category: 'rules', path: rel, content: r.body + '\n' })
-    }
-    if (memories.length)
-      out.push({
-        category: 'rules',
-        sharedFile: 'opencode.json',
-        format: 'json',
-        data: { instructions: memories.sort() },
-      })
+    // rules reach OpenCode via AGENTS.md, which it reads natively (agentsmd.js)
 
     for (const c of model.commands.filter((c) => wants(c, 'opencode'))) {
       const fm = { ...(c.fm.description ? { description: c.fm.description } : {}), ...(c.fm.opencode ?? {}) }
