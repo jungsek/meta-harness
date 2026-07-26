@@ -172,7 +172,6 @@ export function loadModel(srcDir) {
     rules: parseMdDir(srcDir, 'rules', issues),
     agents: parseAgents(srcDir, issues),
     commands: parseMdDir(srcDir, 'commands', issues),
-    workflows: parseMdDir(srcDir, 'workflows', issues),
     mcp: parseMcp(srcDir, issues),
     hooks: parseHooks(srcDir, issues),
     env: parseEnv(srcDir, issues),

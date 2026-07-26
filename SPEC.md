@@ -22,18 +22,17 @@ npm-published CLI. All ratified decisions below still stand.
   hand-managed, out of scope.
 - **Outputs are committed.** Generated config is part of the repo; the
   manifest makes "these files are outputs" enforceable in CI.
-- **Identity files stay the user's.** `CLAUDE.md` is never generated, and
-  `AGENTS.md` is never generated *wholesale* — meta-harness owns only a
-  marker-delimited block inside it (the sole prose channel to Codex and
-  Hermes) and preserves everything around it verbatim. Shadow files like
-  `.hermes.md` are never written, since they would override AGENTS.md.
+- **Identity files are never written.** `AGENTS.md` and `CLAUDE.md` are
+  entirely yours. Every target that needs rules gets them through a file
+  meta-harness owns outright, which is what makes whole-file ownership — the
+  simplest drift model — possible everywhere.
 - **Own the encoding matrix.** Six targets × ~7 categories is small enough
   to maintain directly; correctness of each dialect beats breadth of tools.
 
 ## 2. Target scope decisions [ratified]
 
-- **claude**: rules/commands/workflows symlinked (`.claude/rules|commands|
-  workflows/`), agents generated (`.claude/agents/*.md`), `.mcp.json`,
+- **claude**: rules/commands symlinked (`.claude/rules|commands/`),
+  agents generated (`.claude/agents/*.md`), `.mcp.json`,
   env + hooks + plugins + settings fragments → `.claude/settings.json`.
 - **codex**: agents → `.codex/agents/*.toml` (`developer_instructions`
   triple-quoted); MCP → `[mcp_servers]` in `.codex/config.toml` with real
@@ -90,7 +89,6 @@ Default source dir `.meta-harness/`; configurable via `sourceDir` in
 ├── agents/*.md               # subagents: shared frontmatter + per-target blocks
 │   └── teams/                # NOT compiled (prose briefs, presets)
 ├── commands/*.md             # slash commands
-├── workflows/*.md            # Claude workflows
 ├── connections/mcp.jsonc     # canonical MCP map + per-target overrides
 ├── env/env.jsonc             # env vars
 ├── hooks/hooks.jsonc         # canonical events + per-target overrides
@@ -151,7 +149,7 @@ Three layers, no overlap:
 - **CLI** — deterministic. Compiles, verifies, reports; owns every write to a
   target. Never prompts, never guesses, never interactive. `--json` for
   machines.
-- **Agent** — the interactive layer. Turns prose (`HARNESS-REQUEST.md`, or
+- **Agent** — the interactive layer. Turns prose (`HARNESS-INIT.md`, or
   just what the user said) into source
   files, chooses targets, drafts `AGENTS.md`, runs the commands the CLI can't
   decide for you. Never writes a generated output — the drift contract catches

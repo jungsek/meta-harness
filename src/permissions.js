@@ -16,9 +16,9 @@ const CLAUDE_TOOL = { bash: 'Bash', edit: 'Edit', read: 'Read', write: 'Write', 
 const CODEX_DECISION = { allow: 'allow', deny: 'forbidden', ask: 'prompt' }
 
 export function parsePermissions(raw, file, issues) {
-  if (!raw?.permission) return null
+  if (!raw?.permission && !raw?.claude && !raw?.codex) return null
   const out = {}
-  for (const [kind, entries] of Object.entries(raw.permission)) {
+  for (const [kind, entries] of Object.entries(raw.permission ?? {})) {
     if (!CLAUDE_TOOL[kind]) {
       issues.push({ level: 'warn', file, message: `unknown permission kind "${kind}" (known: ${Object.keys(CLAUDE_TOOL).join(' ')})` })
       continue
@@ -36,7 +36,10 @@ export function parsePermissions(raw, file, issues) {
       out[kind][pattern] = decision
     }
   }
-  return { rules: out, file }
+  // Native knobs that are permission concepts but have no portable form:
+  // codex approval_policy/sandbox_mode, claude defaultMode. They belong with
+  // the permissions they modify, not adrift in settings/.
+  return { rules: out, native: { claude: raw.claude ?? null, codex: raw.codex ?? null }, file }
 }
 
 // → Claude's { allow: [...], deny: [...], ask: [...] }

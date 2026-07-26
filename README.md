@@ -36,7 +36,7 @@ example), run `meta-harness generate`. No agent involved.
 `meta-harness explain <category>` prints the shape of any source file.
 
 **By agent** — ask any coding agent *"build my harness"*, with requirements
-inline, or after sketching them in `.meta-harness/HARNESS-REQUEST.md`, or ask
+inline, or after sketching them in `.meta-harness/HARNESS-INIT.md`, or ask
 to be interviewed. The agent writes the source files; the CLI still owns every write
 to `.claude/`, `.codex/`, and friends. `init` installs the skill that teaches
 it this — via `npx skills add`, which owns skill directories; meta-harness
@@ -45,7 +45,7 @@ never writes them itself.
 The split is deliberate: **turning intent into source files is judgment
 (agent); turning source files into native config is a pure function (CLI).**
 
-`.meta-harness/` is always the source of truth. `HARNESS-REQUEST.md` is only
+`.meta-harness/` is always the source of truth. `HARNESS-INIT.md` is only
 ever *input* — a scratchpad for describing what you want, never compiled and
 never a record of what exists. For that, `meta-harness show` derives the
 current contents from the source files, so it can't go stale the way a
@@ -58,7 +58,6 @@ checked-in summary would.
 ├── rules/*.md                # markdown rules (+ optional frontmatter)
 ├── agents/*.md               # subagents: shared frontmatter + per-target blocks
 ├── commands/*.md             # slash commands
-├── workflows/*.md            # Claude workflows
 ├── connections/mcp.jsonc     # canonical MCP server map + per-target overrides
 ├── env/env.jsonc             # env vars
 ├── hooks/hooks.jsonc         # canonical hook events (PascalCase) + per-target overrides
@@ -83,10 +82,9 @@ machine-local overlay, gitignore it):
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
-| rules/ | `.claude/rules/` (symlink) | `AGENTS.md` block ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | `AGENTS.md` block ¹ |
+| rules/ | `.claude/rules/` (symlink) | `.codex/harness-rules.md` ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | — ¹ |
 | agents/ | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/*.md` | JSON specs + Python plugin |
 | commands/ | `.claude/commands/` (symlink) | — ² | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — ² |
-| workflows/ | `.claude/workflows/` (symlink) | — | — | — | — | — |
 | mcp.jsonc | `.mcp.json` | `[mcp_servers]` in config.toml ³ | `.cursor/mcp.json` | `opencode.json` `mcp`+`tools` ³ | — | — ² |
 | hooks.jsonc | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin ⁴ | — | — ² |
 | env.jsonc | `env` in settings.json | `[shell_environment_policy]` | — | — | — | — |
@@ -94,12 +92,11 @@ machine-local overlay, gitignore it):
 | permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — | — |
 | settings/ | rest of settings.json | rest of config.toml | — | — | — | — |
 
-¹ Codex and Hermes have no project rules directory for prose — Codex parses
-`.codex/rules/*.rules` as Starlark exec policy, not instructions — so rules
-reach them through a marker-delimited block in `AGENTS.md`. **The file stays
-yours:** everything outside `<!-- meta-harness:start -->…<!-- meta-harness:end -->`
-is preserved verbatim and never counts as drift, and dropping those targets
-strips the block while keeping your prose.
+¹ Codex loads `.codex/harness-rules.md` **in addition to** your `AGENTS.md`,
+via `project_doc_fallback_filenames` in `.codex/config.toml` (verified against
+codex 0.145). Your `AGENTS.md` and `CLAUDE.md` are never written. Path-scoped
+rules are skipped for Codex and warned about, since it loads project docs
+unconditionally.
 ² Global-only in that tool (`~/`); meta-harness never writes outside the project.
 ³ Real dialect translation per target — field renames, `type` handling,
 `${VAR}` env-ref syntax, `disabled`→`enabled`, tool filters.

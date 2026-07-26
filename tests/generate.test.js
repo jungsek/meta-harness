@@ -271,7 +271,7 @@ test('explain covers every category the loader reads', () => {
   const out = execFileSync('node', [path.resolve(import.meta.dirname, '../bin/meta-harness.js'), 'explain'], {
     encoding: 'utf8',
   })
-  for (const c of ['rules', 'agents', 'commands', 'workflows', 'connections', 'hooks', 'env', 'plugins', 'settings'])
+  for (const c of ['rules', 'agents', 'commands', 'connections', 'hooks', 'env', 'plugins', 'permissions', 'settings'])
     assert.match(out, new RegExp(c), `explain must list ${c}`)
 })
 
@@ -285,34 +285,7 @@ test('show reports the source contents, not the outputs', () => {
   assert.ok(!out.includes('.claude/'), 'must not list generated outputs')
 })
 
-test('rules reach codex through a managed AGENTS.md block, preserving user prose', () => {
-  const root = fixture()
-  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# My Project\n\nProse I wrote.\n')
-  generate(root)
-  const md = () => fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
-  assert.match(md(), /Prose I wrote/, 'user prose survives')
-  assert.match(md(), /meta-harness:start/, 'managed block added')
 
-  // Editing outside the block is the user's business, not drift.
-  fs.appendFileSync(path.join(root, 'AGENTS.md'), '\nMore of my prose.\n')
-  assert.strictEqual(generate(root).drifted.length, 0, 'prose edits must not drift')
-  assert.match(md(), /More of my prose/)
-
-  // Editing inside it is drift — that content is generated.
-  fs.writeFileSync(path.join(root, 'AGENTS.md'), md().replace('meta-harness:start -->', 'meta-harness:start -->\nTAMPERED'))
-  assert.deepStrictEqual(generate(root, { force: true }).drifted, ['AGENTS.md'])
-})
-
-test('dropping the codex target strips the block but keeps the prose', () => {
-  const root = fixture()
-  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nKeep me.\n')
-  generate(root)
-  fs.writeFileSync(path.join(root, 'meta-harness.jsonc'), '{ "targets": ["claude"] }')
-  generate(root)
-  const md = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
-  assert.match(md, /Keep me/, 'prose survives pruning')
-  assert.ok(!md.includes('meta-harness:start'), 'block removed')
-})
 
 test('unified permissions compile to both Claude and Codex dialects', () => {
   const root = fixture()
@@ -362,13 +335,39 @@ test('fragment collision names both sources', () => {
   assert.throws(() => generate(root), /permissions\/ and settings\/|settings\/ and permissions\//)
 })
 
-test('root: true rules lead the AGENTS.md block', () => {
+test('rules reach codex via an owned project doc, leaving AGENTS.md alone', () => {
   const root = fixture()
-  const r = (n, body, fm = '') =>
-    fs.writeFileSync(path.join(root, '.meta-harness/rules', n), `---\ndescription: d\n${fm}---\n\n${body}\n`)
-  r('zebra.md', '# Zebra')
-  r('identity.md', '# Identity', 'root: true\n')
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nProse I wrote.\n')
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/rules/identity.md'),
+    '---\ndescription: d\nroot: true\n---\n\n# Identity\n'
+  )
   generate(root)
-  const md = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
-  assert.ok(md.indexOf('# Identity') < md.indexOf('# Zebra'), 'root rule must lead despite sorting last-ish')
+
+  assert.strictEqual(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '# Mine\n\nProse I wrote.\n')
+  const doc = fs.readFileSync(path.join(root, '.codex/harness-rules.md'), 'utf8')
+  assert.match(doc, /# Identity/)
+  // the fixture's other rule is path-scoped, so it must NOT be promoted to
+  // Codex's always-on doc — that would change when it applies
+  assert.ok(!doc.includes('2-space indent'), 'path-scoped rules stay out of the codex doc')
+  // and codex is told to load it, additively alongside AGENTS.md
+  assert.match(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'), /project_doc_fallback_filenames/)
+})
+
+test('native permission knobs live with the permissions they modify', () => {
+  const root = fixture()
+  fs.mkdirSync(path.join(root, '.meta-harness/permissions'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, '.meta-harness/permissions/permissions.jsonc'),
+    JSON.stringify({
+      permission: { bash: { 'rm -rf *': 'deny' } },
+      codex: { approval_policy: 'on-request', sandbox_mode: 'workspace-write' },
+      claude: { defaultMode: 'acceptEdits' },
+    })
+  )
+  fs.writeFileSync(path.join(root, '.meta-harness/settings/claude.settings.jsonc'), '{}')
+  generate(root)
+  assert.match(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'), /approval_policy = "on-request"/)
+  const claude = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'))
+  assert.strictEqual(claude.defaultMode, 'acceptEdits')
 })

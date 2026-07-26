@@ -10,7 +10,7 @@ config. You write the source; the CLI writes every output.
 
 - **`<sourceDir>/`** (default `.meta-harness/`, set by `sourceDir` in `meta-harness.jsonc`) — the source of truth. Yours to edit.
 - **`.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json`** — compiled outputs. Editing these by hand is what the tool exists to prevent: `generate` refuses to overwrite hand edits, so a change made there blocks the next build instead of surviving it. Put the change in the source and it reaches every tool at once.
-- **`HARNESS-REQUEST.md`** in the source root — the user's plain-language request. Input only, never compiled.
+- **`HARNESS-INIT.md`** in the source root — the user's plain-language request. Input only, never compiled.
 
 Three commands answer most questions, so ask the tool rather than guessing:
 `meta-harness --help` (the CLI surface), `meta-harness explain <category>`
@@ -21,7 +21,7 @@ currently contains).
 
 Users arrive three ways. All converge on the same middle.
 
-1. **They wrote a request** — `HARNESS-REQUEST.md` exists. Read it and build.
+1. **They wrote a request** — `HARNESS-INIT.md` exists. Read it and build.
 2. **They just asked** — "build my harness, claude and codex, agents stop before payments." Build from what they said, defaulting anything they clearly don't care about. A harness that exists beats one that was perfectly specified.
 3. **They want guidance** — walk them through `references/interview.md`.
 
@@ -37,7 +37,7 @@ Then, every time:
 Resist writing a file that summarizes the harness, however tempting. It
 duplicates state and goes stale the first time anyone edits a rule, whereas
 `show` derives the same view at read time and cannot be wrong. If
-`HARNESS-REQUEST.md` was used, say it has done its job and offer to delete it
+`HARNESS-INIT.md` was used, say it has done its job and offer to delete it
 — but leave the user's prose alone unless they agree.
 
 ## Worked example

@@ -1,5 +1,6 @@
 {
-  // Unified permissions — declared once, enforced in every runtime that can.
+  // Everything about what agents are allowed to do lives here — portable
+  // declarations plus the native knobs that mean the same thing.
   //
   //   allow  never prompts
   //   deny   refused outright
@@ -7,12 +8,12 @@
   //
   // Claude gets a `permissions` block in .claude/settings.json.
   // Codex gets Starlark prefix_rules in .codex/rules/meta-harness.rules —
-  // its only per-command enforcement (approval_policy/sandbox_mode are coarser).
+  // its only per-command enforcement.
   //
   // A rule persuades; a permission enforces. For anything that genuinely
   // matters, write both — a rule in rules/ AND an entry here.
   "permission": {
-    // Shell commands. Patterns are matched as command prefixes.
+    // Shell commands, matched as command prefixes.
     "bash": {
       "git status": "allow",
       "git diff": "allow",
@@ -30,5 +31,15 @@
       ".env": "deny",
       ".env.*": "deny"
     }
+  },
+
+  // Native knobs with no portable equivalent. They belong here, with the
+  // permissions they modify, rather than adrift in settings/.
+  "codex": {
+    // "approval_policy": "on-request",
+    // "sandbox_mode": "workspace-write"
+  },
+  "claude": {
+    // "defaultMode": "acceptEdits"
   }
 }

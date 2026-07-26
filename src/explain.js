@@ -11,7 +11,7 @@ description: Safety floor — protected domains and secrets
 ---
 # Safety
 Stop for human review: migrations, auth, payments, API contracts, CI config.`,
-    goes: 'claude (symlink), agents, cursor (.mdc), opencode (+ instructions[]). codex/hermes read AGENTS.md instead.',
+    goes: 'claude (symlink), agents, cursor (.mdc), opencode (+ instructions[]), codex (.codex/harness-rules.md — path-scoped rules skipped there)',
   },
   agents: {
     where: '<sourceDir>/agents/*.md',
@@ -37,16 +37,6 @@ description: Verify the harness compiled cleanly
 ---
 Run \`meta-harness status\` and report whether every output is clean.`,
     goes: 'claude (symlink), agents, cursor, opencode. codex prompts are global-only.',
-  },
-  workflows: {
-    where: '<sourceDir>/workflows/*.md',
-    what: 'Claude workflows.',
-    frontmatter: 'description (string), targets (array)',
-    example: `---
-description: Release checklist
----
-1. Run tests. 2. Bump version. 3. Tag and push.`,
-    goes: 'claude only (symlink)',
   },
   connections: {
     where: '<sourceDir>/connections/mcp.jsonc',
@@ -91,7 +81,7 @@ description: Release checklist
   permissions: {
     where: '<sourceDir>/permissions/permissions.jsonc',
     what: 'Unified permissions — one declaration, enforced in every runtime that can. Values: allow | deny | ask.',
-    frontmatter: 'n/a — JSONC. Kinds: bash, edit, read, write, webfetch (codex enforces bash only).',
+    frontmatter: 'n/a — JSONC. permission.{bash,edit,read,write,webfetch}, plus native blocks: codex (approval_policy, sandbox_mode), claude (defaultMode).',
     example: `{
   "permission": {
     "bash": { "git status": "allow", "rm -rf *": "deny", "*": "ask" },

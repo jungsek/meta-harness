@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.10.0 — 2026-07-27
+
+- **Rules reach Codex without touching `AGENTS.md`.** Verified against codex
+  0.145: files listed in `project_doc_fallback_filenames` load *in addition
+  to* `AGENTS.md`, so meta-harness writes `.codex/harness-rules.md` and
+  registers it in `.codex/config.toml`. Your `AGENTS.md` and `CLAUDE.md` are
+  never written again.
+  - Supersedes the 0.8.0 managed-block approach. The marker machinery is
+    deleted: one fewer output kind, one fewer drift model.
+  - Measured precedence for the record: `AGENTS.override.md` replaces
+    `AGENTS.md` replaces `.codex/AGENTS.md` — none of those concatenate, which
+    is why a registered project doc is the only additive channel.
+  - **Path-scoped rules are skipped for Codex** and warned about. Codex loads
+    project docs unconditionally, so copying one there would silently promote a
+    conditional rule to always-on.
+- **`workflows` dropped.** `.claude/workflows/` holds `.js` orchestration
+  scripts, not markdown; the category emitted the wrong format and had no users.
+- **`permissions.jsonc` absorbs the native knobs** — `codex.approval_policy`,
+  `codex.sandbox_mode`, `claude.defaultMode` now live beside the permissions
+  they modify instead of in `settings/`.
+- `HARNESS-REQUEST.md` → `HARNESS-INIT.md`.
+
 ## 0.9.1 — 2026-07-27
 
 - `root: true` on a rule makes it lead the `AGENTS.md` block. Identity only

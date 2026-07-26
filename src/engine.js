@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { emitAgentsMd, extractBlock, spliceBlock } from './agentsmd.js'
 import { loadModel } from './model.js'
 import { targets as registry } from './targets/index.js'
 import {
@@ -54,7 +53,6 @@ function discover(root, cfg, { only, targetNames }) {
   const enabled = resolveTargets(targetNames)
   let outputs = []
   for (const t of enabled) outputs = outputs.concat(registry[t].emit(model, ctx))
-  outputs = outputs.concat(emitAgentsMd(model, enabled))
   if (only) outputs = outputs.filter((o) => only.includes(o.category))
 
   // Assemble shared files (settings.json / config.toml / opencode.json …)
@@ -90,11 +88,7 @@ function detectDrift(root, manifest) {
     const abs = path.join(root, rel)
     if (entry.symlink || !fs.existsSync(abs)) continue
     const raw = fs.readFileSync(abs, 'utf8')
-    if (entry.marker) {
-      // Only our block counts — prose around it is the user's and always theirs.
-      const block = extractBlock(raw)
-      if (block === null || sha256(block) !== entry.blockHash) drifted.push(rel)
-    } else if (entry.ownedKeys) {
+    if (entry.ownedKeys) {
       try {
         const data = parseByFormat(entry.format, raw)
         if (ownedHashOf(data, entry.ownedKeys) !== entry.ownedHash) drifted.push(rel)
@@ -163,10 +157,7 @@ export function generate(root, { check = false, force = false, only = null, targ
       continue
     }
     let content, entry
-    if (out.markerFile) {
-      content = spliceBlock(readIf(abs), out.block)
-      entry = { marker: true, blockHash: sha256(out.block) }
-    } else if (out.shared) {
+    if (out.shared) {
       const prev = manifest.files[out.path]
       const m = mergeShared(root, out, prev?.ownedKeys, warnings)
       content = m.content
@@ -196,19 +187,7 @@ export function generate(root, { check = false, force = false, only = null, targ
     for (const [rel, entry] of Object.entries(manifest.files)) {
       if (nextManifest.files[rel]) continue
       const abs = path.join(root, rel)
-      if (entry.marker) {
-        // No longer produced: strip our block, leave the user's prose in place.
-        const raw = readIf(abs)
-        const block = raw === null ? null : extractBlock(raw)
-        if (block !== null) {
-          if (!check) {
-            const rest = raw.replace(block, '').replace(/\n{3,}/g, '\n\n').trim()
-            if (rest) writeFileEnsured(abs, rest + '\n')
-            else fs.rmSync(abs)
-          }
-          result.pruned.push(rel)
-        }
-      } else if (entry.ownedKeys) {
+      if (entry.ownedKeys) {
         // shared file no longer produced: remove only our keys, keep foreign ones
         const raw = readIf(abs)
         if (raw !== null) {
@@ -247,10 +226,7 @@ export function status(root) {
     let state
     if (entry.symlink) state = isLink(abs) ? 'link' : 'MISSING'
     else if (!fs.existsSync(abs)) state = 'MISSING'
-    else if (entry.marker) {
-      const block = extractBlock(fs.readFileSync(abs, 'utf8'))
-      state = block === null ? 'MISSING' : sha256(block) === entry.blockHash ? 'clean' : 'EDITED'
-    } else if (entry.ownedKeys) {
+    else if (entry.ownedKeys) {
       try {
         state =
           ownedHashOf(parseByFormat(entry.format, fs.readFileSync(abs, 'utf8')), entry.ownedKeys) === entry.ownedHash

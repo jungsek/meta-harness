@@ -143,7 +143,7 @@ program
 
 program
   .command('explain')
-  .argument('[category]', 'rules | agents | commands | workflows | connections | hooks | env | plugins | settings')
+  .argument('[category]', 'rules | agents | commands | connections | hooks | env | plugins | permissions | settings')
   .description('print the source file shape for a category (what to write, and where it lands)')
   .action((name) => {
     if (!name) {
@@ -198,7 +198,7 @@ program
         `  ${bold('by agent')}${skilled ? '' : dim('  (needs the skill above)')}\n` +
         `    ask any coding agent: "build my harness"\n` +
         `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
-        `    ...or sketch it in ${cfg.sourceDir}/HARNESS-REQUEST.md first and let it build from that\n` +
+        `    ...or sketch it in ${cfg.sourceDir}/HARNESS-INIT.md first and let it build from that\n` +
         `    ...or ask it to interview you if you'd rather be walked through it\n`
     )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))

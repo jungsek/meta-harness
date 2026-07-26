@@ -31,7 +31,6 @@ export default {
 
     model.rules.filter((r) => wants(r, 'claude')).forEach(link('rules', '.claude/rules'))
     model.commands.filter((c) => wants(c, 'claude')).forEach(link('commands', '.claude/commands'))
-    model.workflows.filter((w) => wants(w, 'claude')).forEach(link('workflows', '.claude/workflows'))
 
     for (const a of model.agents.filter((a) => wants(a, 'claude'))) {
       const fm = { name: a.name, ...a.shared, ...(a.perTarget.claude ?? {}) }
@@ -58,7 +57,11 @@ export default {
       if (Object.keys(events).length) frag('hooks', { hooks: events })
     }
     if (model.plugins) frag('plugins', { enabledPlugins: model.plugins.enabledPlugins })
-    if (model.permissions) frag('permissions', { permissions: toClaudePermissions(model.permissions) })
+    if (model.permissions) {
+      const p = toClaudePermissions(model.permissions)
+      if (Object.keys(p).length) frag('permissions', { permissions: p })
+      if (model.permissions.native.claude) frag('permissions', model.permissions.native.claude)
+    }
     if (model.settings.claude) frag('settings', model.settings.claude)
 
     return out

@@ -20,7 +20,6 @@ export function show(model, cfg, bold) {
   out.push(...section('rules', named(model.rules)))
   out.push(...section('subagents', named(model.agents)))
   out.push(...section('commands', named(model.commands)))
-  out.push(...section('workflows', named(model.workflows)))
 
   if (model.mcp) {
     const rows = Object.entries(model.mcp.servers).map(([n, s]) => [n, s.url ?? s.command ?? '—'])
