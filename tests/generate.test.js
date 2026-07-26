@@ -260,11 +260,11 @@ test('CLI init scaffolds examples idempotently', () => {
   assert.match(again, /already initialized/)
 })
 
-test('HARNESS.md in the source root is never compiled', () => {
+test('HARNESS-REQUEST.md in the source root is never compiled', () => {
   const root = fixture()
-  fs.writeFileSync(path.join(root, '.meta-harness/HARNESS.md'), '# spec\n\nplain language\n')
+  fs.writeFileSync(path.join(root, '.meta-harness/HARNESS-REQUEST.md'), '# request\n\nplain language\n')
   const res = generate(root)
-  assert.ok(!res.written.some((p) => p.includes('HARNESS')), 'HARNESS.md must not produce output')
+  assert.ok(!res.written.some((p) => p.includes('HARNESS')), 'the request file must not produce output')
 })
 
 test('explain covers every category the loader reads', () => {
@@ -273,4 +273,14 @@ test('explain covers every category the loader reads', () => {
   })
   for (const c of ['rules', 'agents', 'commands', 'workflows', 'connections', 'hooks', 'env', 'plugins', 'settings'])
     assert.match(out, new RegExp(c), `explain must list ${c}`)
+})
+
+test('show reports the source contents, not the outputs', () => {
+  const root = fixture()
+  const out = execFileSync('node', [path.resolve(import.meta.dirname, '../bin/meta-harness.js'), 'show'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.match(out, /planner/, 'lists subagents')
+  assert.ok(!out.includes('.claude/'), 'must not list generated outputs')
 })

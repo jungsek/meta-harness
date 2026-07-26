@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
 import { DEFAULT_TARGETS, generate, loadConfig, status } from '../src/engine.js'
 import { CATEGORIES, explain } from '../src/explain.js'
+import { loadModel } from '../src/model.js'
+import { show } from '../src/show.js'
 import { targets as registry } from '../src/targets/index.js'
 
 const root = process.cwd()
@@ -123,6 +125,19 @@ function installSkill() {
 }
 
 program
+  .command('show')
+  .description('what this harness contains, read from the source (always accurate)')
+  .action(() => {
+    const cfg = loadConfig(root)
+    try {
+      console.log(show(loadModel(path.join(root, cfg.sourceDir)), cfg, bold))
+    } catch (e) {
+      console.error(red(e.message))
+      process.exit(1)
+    }
+  })
+
+program
   .command('explain')
   .argument('[category]', 'rules | agents | commands | workflows | connections | hooks | env | plugins | settings')
   .description('print the source file shape for a category (what to write, and where it lands)')
@@ -179,7 +194,7 @@ program
         `  ${bold('by agent')}${skilled ? '' : dim('  (needs the skill above)')}\n` +
         `    ask any coding agent: "build my harness"\n` +
         `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
-        `    ...or write ${cfg.sourceDir}/HARNESS.md first and let it build from that\n` +
+        `    ...or sketch it in ${cfg.sourceDir}/HARNESS-REQUEST.md first and let it build from that\n` +
         `    ...or ask it to interview you if you'd rather be walked through it\n`
     )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))

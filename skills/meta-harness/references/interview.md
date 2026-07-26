@@ -46,6 +46,7 @@ Becomes `connections/mcp.jsonc` and `env/env.jsonc`. Fine to leave empty.
 
 ## After the interview
 
-Build it, run `generate`, then write `HARNESS.md` per
-`references/harness-format.md`. Show them what changed in their own words, and
-name the one or two things you'd add next — don't dump the whole gap list.
+Build it, run `generate`, then `meta-harness show` so they can see what they
+now have. Describe what changed in their own words, and name the one or two
+things you'd add next — don't dump the whole gap list. Don't write a summary
+file; `show` is the summary.

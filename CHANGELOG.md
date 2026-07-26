@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 — 2026-07-27
+
+- `meta-harness show` — what the harness contains, derived from the source
+  files at read time. Replaces the idea of a checked-in summary document,
+  which would go stale the moment a rule changed.
+- `HARNESS.md` renamed `HARNESS-REQUEST.md` and reframed as **input only**:
+  a plain-language request an agent builds from, never a record of what
+  exists, never compiled. The skill is now explicit that agents must not
+  write any file summarizing the harness — `show` is that view.
+- Dropped `references/harness-format.md` (it specified the record format that
+  no longer exists).
+
 ## 0.5.0 — 2026-07-27
 
 - `meta-harness explain [category]` — prints the source file shape, frontmatter

@@ -10,32 +10,34 @@ One source directory compiles to every runtime's native config. You author the
 
 - `<sourceDir>/` (default `.meta-harness/`) — the source of truth. Yours to write.
 - `.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json` — outputs. **Never hand-write these.** `generate` is the only thing that may; it refuses to overwrite hand edits, so it will catch you.
-- `HARNESS.md` in the source root — plain-language spec. Never compiled. Rough intent going in, accurate record coming out.
+- `HARNESS-REQUEST.md` in the source root — the user's plain-language *request*. Input only, never compiled, never a record of what exists.
 
-Run `meta-harness --help` for the CLI surface and `meta-harness explain
-<category>` for a file shape. Don't guess at either — ask the tool.
+Run `meta-harness --help` for the CLI surface, `meta-harness explain
+<category>` for a file shape, and `meta-harness show` for what the harness
+currently contains. Don't guess at any of them — ask the tool.
 
 ## "Build my harness"
 
 Three ways users start. All converge on the same middle.
 
-1. **Spec first** — they wrote `HARNESS.md`; read it and build.
-2. **Straight request** — "build my harness, targets claude and codex, agents stop before payments." Build from what they said; ask only what you can't reasonably default.
+1. **Request file** — they wrote `HARNESS-REQUEST.md`; read it and build.
+2. **Straight ask** — "build my harness, targets claude and codex, agents stop before payments." Build from what they said; ask only what you can't reasonably default.
 3. **Interview** — they want guidance. Walk `references/interview.md`.
 
 Then, always:
 
-1. Read `HARNESS.md` (if present) and every existing source file. Never assume an empty project.
+1. Run `meta-harness show` and read the existing source files. Never assume an empty project.
 2. Write or update the category files. `meta-harness explain <category>` gives you the exact shape.
 3. `meta-harness generate --dry-run --json` — read the plan back. Confirm it matches intent *before* writing.
 4. `meta-harness generate`, then `meta-harness status`.
-5. Rewrite `HARNESS.md` to describe what now exists, in the format in `references/harness-format.md`.
-6. Audit against `references/review.md` and tell the user about real gaps. Don't invent work.
-7. Report in their terms — "agents now stop before payments" — not as a list of file paths.
+5. Audit against `references/review.md` and tell the user about real gaps. Don't invent work.
+6. Report in their terms — "agents now stop before payments" — not as a list of file paths. `meta-harness show` is the shared view; point them at it rather than writing your own summary file.
 
-Step 5 matters: `HARNESS.md` is documentation *derived from* the source files,
-not a second source of truth. Source files are authoritative; if the two
-disagree, the files win and `HARNESS.md` gets rewritten.
+**Never write a file that summarizes the harness.** It would duplicate state
+and go stale the first time someone edits a rule. `show` derives the same view
+at read time and cannot be wrong. If `HARNESS-REQUEST.md` was used, say it has
+served its purpose and offer to delete it — never delete the user's prose
+unasked.
 
 ## Boundaries
 
@@ -52,6 +54,5 @@ Never `--force` without reading the diff first — you'd discard the user's work
 
 ## Reference
 
-- `references/harness-format.md` — the HARNESS.md format
 - `references/interview.md` — questions for the guided path
 - `references/review.md` — gap and best-practice checklist
