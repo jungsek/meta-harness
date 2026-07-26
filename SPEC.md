@@ -22,9 +22,11 @@ npm-published CLI. All ratified decisions below still stand.
   hand-managed, out of scope.
 - **Outputs are committed.** Generated config is part of the repo; the
   manifest makes "these files are outputs" enforceable in CI.
-- **Identity files are hand-authored.** `AGENTS.md`/`CLAUDE.md` are never
-  generated — most tools read them natively, and generating a shadow file
-  (e.g. `.hermes.md`) would override them.
+- **Identity files stay the user's.** `CLAUDE.md` is never generated, and
+  `AGENTS.md` is never generated *wholesale* — meta-harness owns only a
+  marker-delimited block inside it (the sole prose channel to Codex and
+  Hermes) and preserves everything around it verbatim. Shadow files like
+  `.hermes.md` are never written, since they would override AGENTS.md.
 - **Own the encoding matrix.** Six targets × ~7 categories is small enough
   to maintain directly; correctness of each dialect beats breadth of tools.
 
@@ -38,8 +40,8 @@ npm-published CLI. All ratified decisions below still stand.
   dialect translation (field renames, `type` dropped, `disabled`→`enabled`,
   name charset check, empty-table stripping); hooks → `.codex/hooks.json`
   (NOT `[hooks]` in config.toml); env → `[shell_environment_policy]`;
-  settings → rest of config.toml. Rules and commands skipped at project
-  scope (AGENTS.md read natively; custom prompts are global-only).
+  settings → rest of config.toml. Rules reach Codex through the managed
+  `AGENTS.md` block (below); commands are global-only, skipped.
 - **cursor**: rules → `.cursor/rules/*.mdc` (hand-rolled frontmatter:
   unquoted comma-joined globs; `alwaysApply: true` default when no globs),
   commands, agents, `.cursor/mcp.json` (shared file, `${VAR}`→`${env:VAR}`),
@@ -54,7 +56,7 @@ npm-published CLI. All ratified decisions below still stand.
 - **agents** (`.agents/` standard): rules → `.agents/memories/`, commands →
   `.agents/commands/`, agents → `.agents/subagents/`. Skills stay with
   `npx skills add`.
-- **hermes**: project scope = subagents only (`.hermes/meta-harness/
+- **hermes**: subagents, plus rules via the shared AGENTS.md block. Otherwise (`.hermes/meta-harness/
   subagents/*.json` specs + `.hermes/plugins/meta-harness-subagents/`
   Python plugin registering each as a `delegate_task` command). MCP/hooks/
   permissions/commands live in `~/.hermes/config.yaml` — global, out of
@@ -195,9 +197,15 @@ meta-harness show                    # what the harness contains, derived from s
    `sourceDir: ".harness"`. npm name `@jungsek/meta-harness` (unscoped
    blocked by registry name-similarity rule); bin command `meta-harness`.
 2. rules/ → native rules dirs. `.claude/rules/` confirmed in official docs
-   (recursive, `paths:` frontmatter globs, symlinks OK). Codex
-   `.codex/rules/` format unverified — skipped. AGENTS.md/CLAUDE.md stay
-   hand-authored.
+   (recursive, `paths:` frontmatter globs, symlinks OK). **Corrected
+   2026-07-27:** `.codex/rules/*.rules` is Starlark *exec policy*
+   (`prefix_rule`, `decision="allow"`) parsed by `codex_execpolicy`, not
+   prose instructions — verified in the shipped Codex binary alongside
+   `core/src/agents_md.rs`, which loads the `AGENTS.md`/`AGENTS.override.md`
+   family. Prose therefore reaches Codex and Hermes only via AGENTS.md, so
+   meta-harness owns a marker-delimited block inside it (§6a) rather than
+   leaving those targets ruleless. The file itself stays the user's:
+   everything outside the block is preserved and never counts as drift.
 3. Permissions are ordinary settings keys (`permissions` block in
    `settings/claude.settings.jsonc`; `approval_policy`/`sandbox_mode` in
    `settings/codex.config.toml`). No unified permissions format — each

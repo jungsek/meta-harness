@@ -83,7 +83,7 @@ machine-local overlay, gitignore it):
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
-| rules/ | `.claude/rules/` (symlink) | — ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | — ¹ |
+| rules/ | `.claude/rules/` (symlink) | `AGENTS.md` block ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | `AGENTS.md` block ¹ |
 | agents/ | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/*.md` | JSON specs + Python plugin |
 | commands/ | `.claude/commands/` (symlink) | — ² | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — ² |
 | workflows/ | `.claude/workflows/` (symlink) | — | — | — | — | — |
@@ -93,9 +93,12 @@ machine-local overlay, gitignore it):
 | plugins.jsonc | `enabledPlugins` | — | — | — | — | — |
 | settings/ | rest of settings.json | rest of config.toml | — | — | — | — |
 
-¹ Identity root files (`AGENTS.md`/`CLAUDE.md`) stay **hand-authored** — out of
-tool scope. Codex and Hermes read them natively, so rules are not re-encoded
-for them (generating `.hermes.md` would shadow your AGENTS.md).
+¹ Codex and Hermes have no project rules directory for prose — Codex parses
+`.codex/rules/*.rules` as Starlark exec policy, not instructions — so rules
+reach them through a marker-delimited block in `AGENTS.md`. **The file stays
+yours:** everything outside `<!-- meta-harness:start -->…<!-- meta-harness:end -->`
+is preserved verbatim and never counts as drift, and dropping those targets
+strips the block while keeping your prose.
 ² Global-only in that tool (`~/`); meta-harness never writes outside the project.
 ³ Real dialect translation per target — field renames, `type` handling,
 `${VAR}` env-ref syntax, `disabled`→`enabled`, tool filters.
