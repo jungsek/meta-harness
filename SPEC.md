@@ -208,4 +208,4 @@ Nothing else in v1. No import, no watch, no doctor.
    `permissions.*` profiles). No unified permissions format, no translator —
    each dialect written natively. rulesync dropped entirely.
 4. Publishable npm CLI from day 1. Implementation note: plain ESM JavaScript,
-   no build step — publishable as-is, `npx meta-harness` works immediately.
+   no build step — publishable as-is, `npx @jungsek/meta-harness` works immediately.

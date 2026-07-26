@@ -9,12 +9,14 @@ committed outputs, symlinks where bytes are identical, and a drift contract
 that refuses to clobber hand edits.
 
 ```
-npx meta-harness init               # scaffold source dir + config (commented examples)
-npx meta-harness generate           # compile to native config for all enabled targets
-npx meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
-npx meta-harness status             # manifest vs disk: clean / EDITED / MISSING
-npx meta-harness targets            # list supported targets
+npx @jungsek/meta-harness init               # scaffold source dir + config (commented examples)
+npx @jungsek/meta-harness generate           # compile to native config for all enabled targets
+npx @jungsek/meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
+npx @jungsek/meta-harness status             # manifest vs disk: clean / EDITED / MISSING
+npx @jungsek/meta-harness targets            # list supported targets
 ```
+
+Installed (`npm i -D @jungsek/meta-harness`), the command is just `meta-harness`.
 
 ## Source layout
 

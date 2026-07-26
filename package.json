@@ -1,6 +1,9 @@
 {
-  "name": "meta-harness",
+  "name": "@jungsek/meta-harness",
   "version": "0.2.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "One-way config compiler: single source-of-truth directory → native project config for Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard",
   "type": "module",
   "bin": {
