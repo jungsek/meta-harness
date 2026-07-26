@@ -149,7 +149,8 @@ Three layers, no overlap:
 - **CLI** — deterministic. Compiles, verifies, reports; owns every write to a
   target. Never prompts, never guesses, never interactive. `--json` for
   machines.
-- **Agent** — the interactive layer. Turns prose (`HARNESS.md`) into source
+- **Agent** — the interactive layer. Turns prose (`HARNESS-REQUEST.md`, or
+  just what the user said) into source
   files, chooses targets, drafts `AGENTS.md`, runs the commands the CLI can't
   decide for you. Never writes a generated output — the drift contract catches
   it if it tries.
@@ -166,6 +167,7 @@ meta-harness generate [--check|--force|--dry-run] [-t <targets>] [--only <cats>]
 meta-harness status [--json]         # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets                 # list supported targets
 meta-harness explain [category]      # source file shape per category (schema lives in code)
+meta-harness show                    # what the harness contains, derived from source
 ```
 
 ## 8. Implementation

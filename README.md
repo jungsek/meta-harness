@@ -19,6 +19,7 @@ meta-harness generate           # compile to native config for all enabled targe
 meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
 meta-harness status             # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets            # list supported targets
+meta-harness show               # what this harness contains (derived from source)
 meta-harness explain <category> # what to write in a source file, and where it lands
 meta-harness --help             # all commands + examples
 ```
@@ -35,17 +36,20 @@ example), run `meta-harness generate`. No agent involved.
 `meta-harness explain <category>` prints the shape of any source file.
 
 **By agent** — ask any coding agent *"build my harness"*, with requirements
-inline, or after sketching them in `.meta-harness/HARNESS.md`, or ask to be
-interviewed. The agent writes the source files; the CLI still owns every write
+inline, or after sketching them in `.meta-harness/HARNESS-REQUEST.md`, or ask
+to be interviewed. The agent writes the source files; the CLI still owns every write
 to `.claude/`, `.codex/`, and friends. `init` installs the skill that teaches
 it this — via `npx skills add`, which owns skill directories; meta-harness
 never writes them itself.
 
 The split is deliberate: **turning intent into source files is judgment
 (agent); turning source files into native config is a pure function (CLI).**
-`.meta-harness/` is always the source of truth — `HARNESS.md` is a
-plain-language record of it, never compiled, and rewritten from the files
-whenever they change.
+
+`.meta-harness/` is always the source of truth. `HARNESS-REQUEST.md` is only
+ever *input* — a scratchpad for describing what you want, never compiled and
+never a record of what exists. For that, `meta-harness show` derives the
+current contents from the source files, so it can't go stale the way a
+checked-in summary would.
 
 ## Source layout
 
