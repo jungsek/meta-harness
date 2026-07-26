@@ -10,14 +10,22 @@ committed outputs, symlinks where bytes are identical, and a drift contract
 that refuses to clobber hand edits.
 
 ```
-npx @jungsek/meta-harness init               # scaffold source dir + config (commented examples)
-npx @jungsek/meta-harness generate           # compile to native config for all enabled targets
-npx @jungsek/meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
-npx @jungsek/meta-harness status             # manifest vs disk: clean / EDITED / MISSING
-npx @jungsek/meta-harness targets            # list supported targets
+npm install -g @jungsek/meta-harness
 ```
 
-Installed (`npm i -D @jungsek/meta-harness`), the command is just `meta-harness`.
+```
+meta-harness init               # scaffold source dir + config (commented examples)
+meta-harness generate           # compile to native config for all enabled targets
+meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
+meta-harness status             # manifest vs disk: clean / EDITED / MISSING
+meta-harness targets            # list supported targets
+meta-harness --help             # all commands + examples
+```
+
+Your project gains exactly two things: the source dir (`.meta-harness/`) and
+`meta-harness.jsonc` — plus the native config it compiles. No local
+node_modules, no package.json. (One-off without installing:
+`npx @jungsek/meta-harness <cmd>`; in CI prefer npx.)
 
 ## Source layout
 

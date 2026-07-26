@@ -12,14 +12,17 @@ One-way config compiler. Source of truth lives in one directory (default
 ## Commands
 
 ```
-npx @jungsek/meta-harness init               # scaffold source dir + config
-npx @jungsek/meta-harness generate           # compile all enabled targets
-npx @jungsek/meta-harness generate --check   # drift gate: exit 1 if stale or hand-edited
-npx @jungsek/meta-harness generate --force   # discard hand edits to generated outputs
-npx @jungsek/meta-harness generate -t cursor --only rules,agents   # partial run (no pruning)
-npx @jungsek/meta-harness status [--json]    # per-output: clean / EDITED / MISSING / link
-npx @jungsek/meta-harness targets            # list supported targets
+meta-harness init               # scaffold source dir + config
+meta-harness generate           # compile all enabled targets
+meta-harness generate --check   # drift gate: exit 1 if stale or hand-edited
+meta-harness generate --force   # discard hand edits to generated outputs
+meta-harness generate -t cursor --only rules,agents   # partial run (no pruning)
+meta-harness status [--json]    # per-output: clean / EDITED / MISSING / link
+meta-harness targets            # list supported targets
 ```
+
+Not installed globally? Prefix with `npx @jungsek/meta-harness` (avoids adding
+package.json/node_modules to the project).
 
 ## Operating rules for agents
 
