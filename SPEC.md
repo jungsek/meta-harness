@@ -22,10 +22,10 @@ npm-published CLI. All ratified decisions below still stand.
   hand-managed, out of scope.
 - **Outputs are committed.** Generated config is part of the repo; the
   manifest makes "these files are outputs" enforceable in CI.
-- **Identity files are never written.** `AGENTS.md` and `CLAUDE.md` are
-  entirely yours. Every target that needs rules gets them through a file
-  meta-harness owns outright, which is what makes whole-file ownership — the
-  simplest drift model — possible everywhere.
+- **Identity files stay the user's.** `CLAUDE.md` is never written. `AGENTS.md`
+  is never written *wholesale* — meta-harness owns one marker-delimited block
+  (the only additive prose channel to Codex and Hermes) and preserves
+  everything around it verbatim.
 - **Own the encoding matrix.** Six targets × ~7 categories is small enough
   to maintain directly; correctness of each dialect beats breadth of tools.
 

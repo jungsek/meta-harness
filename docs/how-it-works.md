@@ -60,7 +60,7 @@ Running with `targets: ["*"]` on a scaffolded project produces 22 files:
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
-| rules | `.claude/rules/` (symlink) | `.codex/harness-rules.md` ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | — reads your AGENTS.md |
+| rules | `.claude/rules/` (symlink) | `AGENTS.md` block ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | `AGENTS.md` block ¹ |
 | agents | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/` | JSON specs + Python plugin |
 | commands | `.claude/commands/` (symlink) | — global-only | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — global-only |
 | connections | `.mcp.json` | `[mcp_servers]` in config.toml | `.cursor/mcp.json` | `opencode.json` | — | — global-only |
@@ -70,17 +70,18 @@ Running with `targets: ["*"]` on a scaffolded project produces 22 files:
 | permissions | `permissions` block | `.codex/rules/*.rules` (Starlark) | — | — | — | — |
 | settings | rest of settings.json | rest of config.toml | — | — | — | — |
 
-¹ Registered in `.codex/config.toml` via `project_doc_fallback_filenames`,
-which Codex loads **in addition to** your `AGENTS.md` — verified against codex
-0.145. `AGENTS.md` is never touched. Path-scoped rules are skipped here and
-warned about: Codex loads project docs unconditionally, so copying one would
-silently make it always-on.
+¹ A marker-delimited block in `AGENTS.md`; everything outside it is yours and
+never counts as drift. Measured against codex 0.145: the `AGENTS.md` family
+only ever *replaces* (`AGENTS.override.md` > `AGENTS.md` > `.codex/AGENTS.md`),
+and `project_doc_fallback_filenames` loads only when `AGENTS.md` is absent —
+so a managed block is the one additive prose channel. Path-scoped rules are
+skipped and warned about, since `AGENTS.md` loads unconditionally.
 
 Each target owns its dialect translation — field renames, env-ref syntax
 (`${VAR}` vs `${env:VAR}` vs `{env:VAR}`), event-name mapping, `disabled` vs
 `enabled`. That's the part that would otherwise be your problem.
 
-## Three ways a file gets written
+## Four ways a file gets written
 
 This is the part worth understanding, because it determines what counts as
 "yours" versus "the tool's".
@@ -91,7 +92,11 @@ This is the part worth understanding, because it determines what counts as
 2. **Generated file** — when encoding differs (Codex `.toml`, Cursor `.mdc`,
    the OpenCode hooks plugin, Hermes specs). Whole file is owned; the whole
    file is hashed.
-3. **Shared-file fragment** — several categories merge into one file
+3. **Marker block** — `AGENTS.md` only. meta-harness owns the region between
+   `<!-- meta-harness:start -->` and `<!-- meta-harness:end -->`; everything
+   around it is yours. Drop the Codex/Hermes targets and the block goes while
+   your prose stays.
+4. **Shared-file fragment** — several categories merge into one file
    (`.claude/settings.json` takes env + hooks + plugins + permissions +
    settings). **Only the keys meta-harness produces are owned**; anything else
    in that file is preserved verbatim and never counts as drift. Two fragments
@@ -103,7 +108,7 @@ This is the part worth understanding, because it determines what counts as
    unknown targets, malformed JSONC (reported with a line number) abort here —
    before anything is written.
 2. **Emit per target.** Each enabled target translates the model into its
-   dialect, producing outputs of the three kinds above.
+   dialect, producing outputs of the four kinds above.
 3. **Assemble shared files** from their fragments, key-sorted, collisions hard.
 4. **Check drift.** Every managed path is compared to the manifest — whole-file
    hash or owned-key hash depending on kind. Any hand-edited
@@ -141,7 +146,7 @@ the agent honest.
 
 - **Skills** — `npx skills add` owns skill dirs and `skills-lock.json`.
 - **Anything in `~/`** — global runtime config is hand-managed.
-- **`AGENTS.md` and `CLAUDE.md`** — entirely hand-authored, never written.
+- **`CLAUDE.md`** — never written. (`AGENTS.md` is only *partly* managed: one block.)
 - **Orchestration** — agent-team briefs are prose, nothing to compile.
 - **`import`** — reverse direction, specced in `import-spec.md`, not built.
   This is the current biggest gap: an existing `.claude/`+`.codex/` setup has

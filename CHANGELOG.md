@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.1 — 2026-07-27
+
+- **Reverts the 0.10.0 Codex rules mechanism, which did not work.**
+  `project_doc_fallback_filenames` is a true fallback: measured against codex
+  0.145, a registered project doc is ignored whenever `AGENTS.md` exists, so
+  0.10.0 stopped delivering rules to Codex in any repo that has one. The
+  managed `AGENTS.md` block is restored — it is the only additive
+  project-scope prose channel. Measured precedence, for the record:
+  `AGENTS.override.md` > `AGENTS.md` > `.codex/AGENTS.md`, none concatenating.
+- Kept from 0.10.0: path-scoped rules are skipped for the AGENTS.md block and
+  warned about, since it loads unconditionally and would silently promote a
+  conditional rule to always-on.
+
 ## 0.10.0 — 2026-07-27
 
 - **Rules reach Codex without touching `AGENTS.md`.** Verified against codex

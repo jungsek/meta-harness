@@ -335,25 +335,26 @@ test('fragment collision names both sources', () => {
   assert.throws(() => generate(root), /permissions\/ and settings\/|settings\/ and permissions\//)
 })
 
-test('rules reach codex via an owned project doc, leaving AGENTS.md alone', () => {
+test('rules reach codex via a managed AGENTS.md block, preserving user prose', () => {
   const root = fixture()
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nProse I wrote.\n')
   fs.writeFileSync(
     path.join(root, '.meta-harness/rules/identity.md'),
     '---\ndescription: d\nroot: true\n---\n\n# Identity\n'
   )
-  generate(root)
+  const res = generate(root)
+  const md = () => fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
 
-  assert.strictEqual(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '# Mine\n\nProse I wrote.\n')
-  const doc = fs.readFileSync(path.join(root, '.codex/harness-rules.md'), 'utf8')
-  assert.match(doc, /# Identity/)
-  // the fixture's other rule is path-scoped, so it must NOT be promoted to
-  // Codex's always-on doc — that would change when it applies
-  assert.ok(!doc.includes('2-space indent'), 'path-scoped rules stay out of the codex doc')
-  // and codex is told to load it, additively alongside AGENTS.md
-  assert.match(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'), /project_doc_fallback_filenames/)
+  assert.match(md(), /Prose I wrote/, 'user prose survives')
+  assert.match(md(), /# Identity/, 'rules land in the managed block')
+  // AGENTS.md loads unconditionally, so a path-scoped rule must not be promoted
+  assert.ok(!md().includes('2-space indent'), 'path-scoped rules stay out')
+  assert.ok(res.warnings.some((w) => w.includes('path-scoped')), 'and the skip is announced')
+
+  // prose edits outside the block are the user's business, not drift
+  fs.appendFileSync(path.join(root, 'AGENTS.md'), '\nMore prose.\n')
+  assert.strictEqual(generate(root).drifted.length, 0)
 })
-
 test('native permission knobs live with the permissions they modify', () => {
   const root = fixture()
   fs.mkdirSync(path.join(root, '.meta-harness/permissions'), { recursive: true })
