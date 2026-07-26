@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — 2026-07-26
+
+- `init` detects a local npm install and prints the global-install tip
+  (local `npm i` is what creates package.json/node_modules bloat — the tool
+  itself never does).
+
 ## 0.3.0 — 2026-07-26
 
 - Standalone product: all external-tool references removed from docs, code,
