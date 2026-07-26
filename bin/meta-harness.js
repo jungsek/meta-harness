@@ -92,11 +92,15 @@ program
         const color = r.state === 'clean' ? dim : r.state === 'link' ? dim : red
         console.log(`  ${color(r.state.padEnd(8))} ${r.path}`)
       }
-      console.log(
-        bad.length
-          ? red(`✘ ${bad.length} of ${rows.length} outputs need attention — port changes to the source, then: meta-harness generate --force`)
-          : green(`✔ all clean (${rows.length} outputs)`)
-      )
+      if (!bad.length) console.log(green(`✔ all clean (${rows.length} outputs)`))
+      else {
+        const edited = bad.filter((r) => r.state === 'EDITED').length
+        // MISSING just needs a rebuild; EDITED means someone's work is at stake.
+        const fix = edited
+          ? 'port those changes into the source, then: meta-harness generate --force'
+          : 'rebuild them: meta-harness generate'
+        console.log(red(`✘ ${bad.length} of ${rows.length} outputs need attention — ${fix}`))
+      }
     }
     if (bad.length) process.exit(1)
   })
