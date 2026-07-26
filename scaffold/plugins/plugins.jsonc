@@ -1,0 +1,4 @@
+{
+  // Claude Code enabledPlugins list (other targets: no plugin system — no-op).
+  "enabledPlugins": []
+}

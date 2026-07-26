@@ -1,0 +1,10 @@
+{
+  // Canonical MCP server map (Claude-style fields). Emitted to .mcp.json,
+  // .codex/config.toml [mcp_servers], .cursor/mcp.json, opencode.json.
+  "mcpServers": {
+    // "deepwiki": { "type": "http", "url": "https://mcp.deepwiki.com/mcp" },
+    // "files": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] }
+  }
+  // Per-target overrides: same-named entry replaces wholesale, null deletes:
+  // "codex": { "mcpServers": { "deepwiki": null } }
+}

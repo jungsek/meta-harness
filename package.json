@@ -1,0 +1,52 @@
+{
+  "name": "meta-harness",
+  "version": "0.2.0",
+  "description": "One-way config compiler: single source-of-truth directory → native project config for Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard",
+  "type": "module",
+  "bin": {
+    "meta-harness": "bin/meta-harness.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scaffold",
+    "schema",
+    "skills",
+    "SPEC.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jungsek/meta-harness.git"
+  },
+  "homepage": "https://github.com/jungsek/meta-harness#readme",
+  "bugs": {
+    "url": "https://github.com/jungsek/meta-harness/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "opencode",
+    "hermes",
+    "agents",
+    "ai-agents",
+    "config",
+    "rulesync",
+    "harness",
+    "mcp"
+  ],
+  "dependencies": {
+    "commander": "^14.0.0",
+    "gray-matter": "^4.0.3",
+    "jsonc-parser": "^3.3.1",
+    "smol-toml": "^1.4.2"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

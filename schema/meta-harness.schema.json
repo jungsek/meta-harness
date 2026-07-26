@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jungsek/meta-harness/main/schema/meta-harness.schema.json",
+  "title": "meta-harness config",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "sourceDir": {
+      "type": "string",
+      "description": "Source-of-truth directory, relative to the repo root.",
+      "default": ".meta-harness"
+    },
+    "targets": {
+      "type": "array",
+      "description": "Targets to generate. \"*\" expands to all supported targets.",
+      "items": {
+        "enum": ["*", "claude", "codex", "agents", "cursor", "opencode", "hermes"]
+      },
+      "default": ["claude", "codex"]
+    }
+  },
+  "additionalProperties": false
+}

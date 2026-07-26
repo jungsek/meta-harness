@@ -1,0 +1,6 @@
+{
+  // Remaining .claude/settings.json keys — model, statusLine, permissions, etc.
+  // Written natively; no unified permissions dialect.
+  // "model": "opus",
+  // "permissions": { "deny": ["Read(.env)"] }
+}

@@ -1,0 +1,13 @@
+{
+  // Canonical events are PascalCase; entries are Claude-shaped.
+  // Unsupported events are skipped per target with a warning.
+  // Claude → settings.json hooks block · Codex → .codex/hooks.json
+  // Cursor → .cursor/hooks.json · OpenCode → generated plugin
+  "hooks": {
+    // "PostToolUse": [
+    //   { "matcher": "Write|Edit", "hooks": [{ "type": "command", "command": ".meta-harness/hooks/format.sh" }] }
+    // ]
+  }
+  // Per-target wholesale override:
+  // "codex": { "hooks": { ... } }
+}
