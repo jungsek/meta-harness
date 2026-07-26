@@ -88,12 +88,24 @@ description: Release checklist
     example: `{ "enabledPlugins": ["some-plugin@marketplace"] }`,
     goes: 'claude only',
   },
+  permissions: {
+    where: '<sourceDir>/permissions/permissions.jsonc',
+    what: 'Unified permissions — one declaration, enforced in every runtime that can. Values: allow | deny | ask.',
+    frontmatter: 'n/a — JSONC. Kinds: bash, edit, read, write, webfetch (codex enforces bash only).',
+    example: `{
+  "permission": {
+    "bash": { "git status": "allow", "rm -rf *": "deny", "*": "ask" },
+    "read": { ".env": "deny" }
+  }
+}`,
+    goes: 'claude permissions block; codex .codex/rules/meta-harness.rules Starlark prefix_rules (needs directory trust to take effect)',
+  },
   settings: {
     where: '<sourceDir>/settings/claude.settings.jsonc and <sourceDir>/settings/codex.config.toml',
-    what: 'Native per-runtime keys, written in each tool’s own dialect. Permissions live here — there is no unified permissions format.',
+    what: 'Native per-runtime keys in each tool’s own dialect, for anything the unified categories do not cover.',
     frontmatter: 'n/a — JSONC / TOML',
-    example: `// claude.settings.jsonc
-{ "permissions": { "deny": ["Read(.env)", "Bash(rm -rf *)"] } }
+    example: `// claude.settings.jsonc  (permissions belong in permissions/, not here)
+{ "model": "opus", "enableAllProjectMcpServers": true }
 
 # codex.config.toml
 approval_policy = "never"

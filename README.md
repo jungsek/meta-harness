@@ -91,6 +91,7 @@ machine-local overlay, gitignore it):
 | hooks.jsonc | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin ⁴ | — | — ² |
 | env.jsonc | `env` in settings.json | `[shell_environment_policy]` | — | — | — | — |
 | plugins.jsonc | `enabledPlugins` | — | — | — | — | — |
+| permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — | — |
 | settings/ | rest of settings.json | rest of config.toml | — | — | — | — |
 
 ¹ Codex and Hermes have no project rules directory for prose — Codex parses
@@ -104,6 +105,11 @@ strips the block while keeping your prose.
 `${VAR}` env-ref syntax, `disabled`→`enabled`, tool filters.
 ⁴ OpenCode has no hooks config file; meta-harness generates
 `.opencode/plugins/meta-harness-hooks.js` from your canonical events.
+⁵ `allow`/`deny`/`ask` compile to Claude's permissions and to Codex
+`prefix_rule(..., decision="allow"|"forbidden"|"prompt")` — its only
+per-command enforcement. Codex loads project exec policies **only in a trusted
+directory**: run `codex` once and accept the prompt, or deny rules silently
+won't stop anything.
 
 ## Frontmatter
 

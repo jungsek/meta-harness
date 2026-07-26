@@ -1,6 +1,7 @@
 import path from 'node:path'
 import matter from 'gray-matter'
 import { resolveEvents, resolveServers, wants } from '../model.js'
+import { toClaudePermissions } from '../permissions.js'
 
 // https://code.claude.com/docs/en/hooks#hook-events
 const EVENTS = [
@@ -57,6 +58,7 @@ export default {
       if (Object.keys(events).length) frag('hooks', { hooks: events })
     }
     if (model.plugins) frag('plugins', { enabledPlugins: model.plugins.enabledPlugins })
+    if (model.permissions) frag('permissions', { permissions: toClaudePermissions(model.permissions) })
     if (model.settings.claude) frag('settings', model.settings.claude)
 
     return out
