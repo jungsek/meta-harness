@@ -266,3 +266,11 @@ test('HARNESS.md in the source root is never compiled', () => {
   const res = generate(root)
   assert.ok(!res.written.some((p) => p.includes('HARNESS')), 'HARNESS.md must not produce output')
 })
+
+test('explain covers every category the loader reads', () => {
+  const out = execFileSync('node', [path.resolve(import.meta.dirname, '../bin/meta-harness.js'), 'explain'], {
+    encoding: 'utf8',
+  })
+  for (const c of ['rules', 'agents', 'commands', 'workflows', 'connections', 'hooks', 'env', 'plugins', 'settings'])
+    assert.match(out, new RegExp(c), `explain must list ${c}`)
+})
