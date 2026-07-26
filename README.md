@@ -4,7 +4,8 @@ One-way config compiler for coding-agent harnesses: a single source-of-truth
 directory compiles to native project config for **Claude Code, Codex CLI,
 Cursor, OpenCode, Hermes Agent, and the `.agents/` standard**.
 
-rulesync's model, cut down and sharpened: project scope only, six targets,
+Write your rules, subagents, commands, MCP servers, hooks, and settings once —
+`generate` compiles them into each tool's native dialect. Project scope only,
 committed outputs, symlinks where bytes are identical, and a drift contract
 that refuses to clobber hand edits.
 

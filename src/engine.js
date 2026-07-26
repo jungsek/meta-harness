@@ -42,7 +42,7 @@ const parseByFormat = (format, raw) => (format === 'toml' ? parseToml(raw) : JSO
 
 function discover(root, cfg, { only, targetNames }) {
   const srcDir = path.join(root, cfg.sourceDir)
-  if (!fs.existsSync(srcDir)) throw new Error(`source dir not found: ${srcDir}`)
+  if (!fs.existsSync(srcDir)) throw new Error(`source dir not found: ${srcDir} — run: meta-harness init`)
   const model = loadModel(srcDir)
   const errors = model.issues.filter((i) => i.level === 'error')
   if (errors.length)
