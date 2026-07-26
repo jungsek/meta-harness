@@ -253,9 +253,16 @@ test('CLI end-to-end: generate, status, targets, --json', () => {
 test('CLI init scaffolds examples idempotently', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-init-'))
   const bin = path.resolve(import.meta.dirname, '../bin/meta-harness.js')
-  execFileSync('node', [bin, 'init'], { cwd: root, encoding: 'utf8' })
+  execFileSync('node', [bin, 'init', '--no-skill'], { cwd: root, encoding: 'utf8' })
   assert.ok(fs.existsSync(path.join(root, '.meta-harness/rules/example-rule.md')))
   assert.ok(fs.existsSync(path.join(root, 'meta-harness.jsonc')))
-  const again = execFileSync('node', [bin, 'init'], { cwd: root, encoding: 'utf8' })
+  const again = execFileSync('node', [bin, 'init', '--no-skill'], { cwd: root, encoding: 'utf8' })
   assert.match(again, /already initialized/)
+})
+
+test('HARNESS.md in the source root is never compiled', () => {
+  const root = fixture()
+  fs.writeFileSync(path.join(root, '.meta-harness/HARNESS.md'), '# spec\n\nplain language\n')
+  const res = generate(root)
+  assert.ok(!res.written.some((p) => p.includes('HARNESS')), 'HARNESS.md must not produce output')
 })

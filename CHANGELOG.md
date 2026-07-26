@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 — 2026-07-27
+
+- `init` now installs the agent skill by default via `npx skills add
+  jungsek/meta-harness` — the `skills` CLI owns skill directories and
+  `skills-lock.json`, so meta-harness delegates instead of writing them.
+  `--no-skill` opts out (offline / CI).
+- `HARNESS.md` convention: describe your harness in plain language in the
+  source root; it is never compiled. `init` scaffolds a template and the
+  skill teaches agents to author category files from it.
+- `init` now presents both paths explicitly: by hand, or by agent.
+- SPEC §6a records the CLI / agent / skill layering (and why there is no
+  interactive init wizard).
+
 ## 0.3.1 — 2026-07-26
 
 - `init` detects a local npm install and prints the global-install tip

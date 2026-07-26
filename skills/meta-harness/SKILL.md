@@ -24,6 +24,28 @@ meta-harness targets            # list supported targets
 Not installed globally? Prefix with `npx @jungsek/meta-harness` (avoids adding
 package.json/node_modules to the project).
 
+## Building a harness from a natural-language spec
+
+When the user says "build my harness" (or edits `<sourceDir>/HARNESS.md` and
+asks you to apply it):
+
+1. Read `<sourceDir>/HARNESS.md` — plain-language intent, never compiled — and
+   the category files that already exist.
+2. Write or update the category files to match that intent. Match the shape of
+   the commented scaffold examples already in each directory.
+3. `meta-harness generate --dry-run --json` — read the plan back and check it
+   matches what you intended before writing anything.
+4. `meta-harness generate`, then `meta-harness status`.
+5. Report what changed in the user's terms, not in file paths.
+
+You author the **source**. The CLI writes every output. Never hand-write a file
+under `.claude/`, `.codex/`, `.cursor/`, `.opencode/`, `.agents/`, `.hermes/`,
+`.mcp.json`, or `opencode.json` — `generate` is the only thing that may.
+
+Things the compiler does not own, which you may still need to do for the user:
+`AGENTS.md`/`CLAUDE.md` prose (hand-authored), skills (`npx skills add <pkg>`),
+and telling them to trust Codex hooks once interactively.
+
 ## Operating rules for agents
 
 1. **Edit the source, never the outputs.** `.claude/`, `.codex/`, `.cursor/`,

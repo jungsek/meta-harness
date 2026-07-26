@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -107,10 +108,24 @@ program
       console.log(`  ${enabled.has(name) ? green('✔') : ' '} ${name}`)
   })
 
+// The agent-facing skill is installed by `skills`, which owns skills dirs and
+// skills-lock.json — meta-harness delegates rather than writing them itself.
+function installSkill() {
+  const repo = (pkg.repository?.url ?? '').replace(/^git\+|\.git$/g, '').replace(/^https:\/\/github\.com\//, '')
+  if (!repo) return false
+  console.log(dim(`installing the meta-harness skill via: npx skills add ${repo}`))
+  const r = spawnSync('npx', ['-y', 'skills', 'add', repo, '--skill', 'meta-harness', '-y'], {
+    cwd: root,
+    stdio: 'inherit',
+  })
+  return r.status === 0
+}
+
 program
   .command('init')
-  .description('scaffold the source dir + config (idempotent)')
-  .action(() => {
+  .description('scaffold the source dir + config, install the agent skill (idempotent)')
+  .option('--no-skill', 'skip installing the agent skill (no network calls)')
+  .action((opts) => {
     const cfg = loadConfig(root)
     const src = path.join(root, cfg.sourceDir)
     const scaffoldDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../scaffold')
@@ -130,10 +145,19 @@ program
       )
       created++
     }
-    if (created) {
-      console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
-      console.log(`\n${bold('next:')}\n  1. edit ${cfg.sourceDir}/ — every file is a commented example\n  2. meta-harness generate`)
-    } else console.log(`${cfg.sourceDir}/ already initialized`)
+    if (created) console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
+    else console.log(`${cfg.sourceDir}/ already initialized`)
+
+    const skilled = opts.skill ? installSkill() : false
+    if (opts.skill && !skilled)
+      console.warn(yellow('warn: could not install the agent skill — run it yourself:\n      npx skills add jungsek/meta-harness'))
+
+    console.log(
+      `\n${bold('next — pick either path:')}\n` +
+        `  ${bold('by hand')}   edit ${cfg.sourceDir}/ (every file is a commented example), then: meta-harness generate\n` +
+        `  ${bold('by agent')}  describe the harness you want in ${cfg.sourceDir}/HARNESS.md,\n` +
+        `             then ask Claude or Codex: "build my harness"${skilled ? '' : dim(' (needs the skill above)')}`
+    )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))
       console.log(
         yellow(
