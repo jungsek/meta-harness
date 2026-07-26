@@ -134,6 +134,12 @@ program
       console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
       console.log(`\n${bold('next:')}\n  1. edit ${cfg.sourceDir}/ — every file is a commented example\n  2. meta-harness generate`)
     } else console.log(`${cfg.sourceDir}/ already initialized`)
+    if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))
+      console.log(
+        yellow(
+          'tip: meta-harness is npm-installed locally — the package.json/node_modules here came from that install.\n     For a dependency-free project: npm rm @jungsek/meta-harness && npm i -g @jungsek/meta-harness'
+        )
+      )
   })
 
 function walk(dir, prefix = '') {
