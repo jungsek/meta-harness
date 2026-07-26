@@ -65,8 +65,11 @@ npm-published CLI. All ratified decisions below still stand.
 
 ## 3. Non-goals [ratified]
 
-- **Skills.** `npx skills add` owns install + registry (`skills-lock.json`).
-  meta-harness never touches `.agents/skills/`, `.claude/skills/`.
+- **Skills.** `skills` owns install + registry (`skills-lock.json`).
+  meta-harness never *writes* `.agents/skills/` or `.claude/skills/` — but
+  `init` does *invoke* `npx skills add <repo>` to install meta-harness's own
+  agent skill. Delegating to the owner of a domain honors the boundary;
+  writing those directories directly would break it. `--no-skill` opts out.
 - **Global scope.** Never writes to `~/`.
 - **Orchestration.** Agent-team briefs are prose read at spawn; nothing to
   compile.
@@ -139,10 +142,26 @@ on the same key = hard error at generate time, not last-wins.
 - Partial runs (`--only`, `--targets`) never prune — they don't discover
   everything and would over-prune.
 
+## 6a. Layering: CLI / agent / skill
+
+Three layers, no overlap:
+
+- **CLI** — deterministic. Compiles, verifies, reports; owns every write to a
+  target. Never prompts, never guesses, never interactive. `--json` for
+  machines.
+- **Agent** — the interactive layer. Turns prose (`HARNESS.md`) into source
+  files, chooses targets, drafts `AGENTS.md`, runs the commands the CLI can't
+  decide for you. Never writes a generated output — the drift contract catches
+  it if it tries.
+- **Skill** — the contract between them: procedure and boundaries only. It
+  points at `--help` rather than restating the CLI surface, so it can't rot.
+
+Corollary: no interactive `init` wizard. The agent is the wizard.
+
 ## 7. CLI surface
 
 ```
-meta-harness init                    # scaffold source dir + config (idempotent)
+meta-harness init [--no-skill]       # scaffold source dir + config, install agent skill
 meta-harness generate [--check|--force|--dry-run] [-t <targets>] [--only <cats>] [--json]
 meta-harness status [--json]         # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets                 # list supported targets

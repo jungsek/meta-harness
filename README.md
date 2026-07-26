@@ -14,7 +14,7 @@ npm install -g @jungsek/meta-harness
 ```
 
 ```
-meta-harness init               # scaffold source dir + config (commented examples)
+meta-harness init               # scaffold source dir + config, install the agent skill
 meta-harness generate           # compile to native config for all enabled targets
 meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
 meta-harness status             # manifest vs disk: clean / EDITED / MISSING
@@ -26,6 +26,18 @@ Your project gains exactly two things: the source dir (`.meta-harness/`) and
 `meta-harness.jsonc` — plus the native config it compiles. No local
 node_modules, no package.json. (One-off without installing:
 `npx @jungsek/meta-harness <cmd>`; in CI prefer npx.)
+
+## Two ways to define your harness
+
+**By hand** — edit the files in `.meta-harness/` (every one is a commented
+example), run `meta-harness generate`. No agent involved.
+
+**By agent** — describe what you want in plain language in
+`.meta-harness/HARNESS.md`, then ask Claude or Codex to *"build my harness"*.
+The agent writes the category files and runs `generate`; the CLI still owns
+every write to `.claude/`, `.codex/`, and friends. `init` installs the skill
+that teaches it this (via `npx skills add`, which owns skills — meta-harness
+never writes skill directories itself). `HARNESS.md` is never compiled.
 
 ## Source layout
 
