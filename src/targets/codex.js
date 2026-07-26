@@ -1,4 +1,3 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import { stringify as stringifyToml } from 'smol-toml'
 import { resolveEvents, resolveServers, wants } from '../model.js'
@@ -55,12 +54,8 @@ export default {
 
     // rules → AGENTS.md is hand-authored (ratified); codex project rules skipped.
     // commands → codex custom prompts are global-only; skipped at project scope.
-    // Codex reads rules only via AGENTS.md. Without one, every rule silently
-    // misses this target — worth saying out loud, since nothing else reveals it.
-    if (model.rules.some((r) => wants(r, 'codex')) && !fs.existsSync(path.join(ctx.root, 'AGENTS.md')))
-      ctx.warnings.push(
-        'codex: no AGENTS.md at the project root — Codex reads rules from it, so your rules do not reach Codex. Write one by hand (it is deliberately not generated).'
-      )
+    // Rules reach Codex through the AGENTS.md managed block (src/agentsmd.js),
+    // since .codex/rules/*.rules is Starlark exec policy, not instructions.
 
     for (const a of model.agents.filter((a) => wants(a, 'codex'))) {
       const toml = { name: a.name, ...a.shared, ...(a.perTarget.codex ?? {}) }
