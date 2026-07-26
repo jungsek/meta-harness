@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
 import { DEFAULT_TARGETS, generate, loadConfig, status } from '../src/engine.js'
-import { CATEGORIES, explain } from '../src/explain.js'
+import { CATEGORIES, TARGETS, explain, explainTarget } from '../src/explain.js'
 import { loadModel } from '../src/model.js'
 import { show } from '../src/show.js'
 import { targets as registry } from '../src/targets/index.js'
@@ -143,18 +143,25 @@ program
 
 program
   .command('explain')
-  .argument('[category]', 'rules | agents | commands | connections | hooks | env | plugins | permissions | settings')
-  .description('print the source file shape for a category (what to write, and where it lands)')
+  .argument('[name]', 'a category (rules, agents, hooks, …) or a target (claude, codex, cursor, …)')
+  .description('print the source file shape for a category, or the managed surfaces + measured nuances for a target')
   .action((name) => {
     if (!name) {
       console.log('categories:')
       for (const [k, c] of Object.entries(CATEGORIES)) console.log(`  ${bold(k.padEnd(12))} ${c.what}`)
-      console.log(`\n${dim('meta-harness explain <category> for the file shape')}`)
+      console.log('\ntargets:')
+      for (const k of Object.keys(TARGETS)) console.log(`  ${bold(k)}`)
+      console.log(`\n${dim('meta-harness explain <category|target>')}`)
       return
     }
-    const text = explain(name, bold)
+    // `agents` is both a category and a target; category wins — the target
+    // reading is available via `explain` with no argument to discover, and
+    // the category (subagent file shape) is what people ask for.
+    const text = explain(name, bold) ?? explainTarget(name, bold, dim)
     if (!text) {
-      console.error(red(`unknown category "${name}" (known: ${Object.keys(CATEGORIES).join(' ')})`))
+      console.error(
+        red(`unknown name "${name}" (categories: ${Object.keys(CATEGORIES).join(' ')}; targets: ${Object.keys(TARGETS).join(' ')})`)
+      )
       process.exit(1)
     }
     console.log(text)

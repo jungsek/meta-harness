@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0 — 2026-07-27
+
+- **`meta-harness explain <target>`** — per-target manual alongside the
+  category shapes: managed surfaces, measured nuances (each target carrying
+  the version it was verified against, claimed only where actually measured —
+  codex-cli 0.145.0 today), vendor docs by link. `explain` with no argument
+  lists both. `agents` names both a category and a target; the category wins.
+
 ## 0.11.0 — 2026-07-27
 
 - **One prose channel: rules compile only into the managed `AGENTS.md` block.**
