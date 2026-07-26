@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 — 2026-07-27
+
+- `root: true` on a rule makes it lead the `AGENTS.md` block. Identity only
+  does its job when read before the rules it frames, and filename ordering is
+  too implicit to depend on. Answers "where does identity live?" without a
+  separate file or category — it is a rule that leads.
+
 ## 0.9.0 — 2026-07-27
 
 - **Unified permissions** (`permissions/permissions.jsonc`) — `allow`/`deny`/

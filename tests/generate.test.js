@@ -361,3 +361,14 @@ test('fragment collision names both sources', () => {
   )
   assert.throws(() => generate(root), /permissions\/ and settings\/|settings\/ and permissions\//)
 })
+
+test('root: true rules lead the AGENTS.md block', () => {
+  const root = fixture()
+  const r = (n, body, fm = '') =>
+    fs.writeFileSync(path.join(root, '.meta-harness/rules', n), `---\ndescription: d\n${fm}---\n\n${body}\n`)
+  r('zebra.md', '# Zebra')
+  r('identity.md', '# Identity', 'root: true\n')
+  generate(root)
+  const md = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
+  assert.ok(md.indexOf('# Identity') < md.indexOf('# Zebra'), 'root rule must lead despite sorting last-ish')
+})

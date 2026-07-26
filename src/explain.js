@@ -5,7 +5,7 @@ export const CATEGORIES = {
   rules: {
     where: '<sourceDir>/rules/*.md',
     what: 'Policy and identity prose the agents must follow.',
-    frontmatter: 'description (string), targets (array, default ["*"]), globs/paths (array, cursor scoping)',
+    frontmatter: 'description (string), targets (array, default ["*"]), globs/paths (array, cursor scoping), root (bool — leads the AGENTS.md block; use it for identity)',
     example: `---
 description: Safety floor — protected domains and secrets
 ---

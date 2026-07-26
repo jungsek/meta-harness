@@ -45,5 +45,9 @@ export function emitAgentsMd(model, targetNames) {
   if (!targetNames.some((t) => AGENTS_MD_TARGETS.includes(t))) return []
   const rules = model.rules.filter((r) => targetNames.some((t) => AGENTS_MD_TARGETS.includes(t) && wants(r, t)))
   if (!rules.length) return []
-  return [{ category: 'rules', path: 'AGENTS.md', markerFile: true, block: blockBody(rules) }]
+  // `root: true` leads the file. Identity ("you are the orchestrator, this is
+  // the source of truth") only does its job if it is read before the rules it
+  // frames, and filename ordering is too implicit to rely on for that.
+  const ordered = [...rules.filter((r) => r.fm.root), ...rules.filter((r) => !r.fm.root)]
+  return [{ category: 'rules', path: 'AGENTS.md', markerFile: true, block: blockBody(ordered) }]
 }
