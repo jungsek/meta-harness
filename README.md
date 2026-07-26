@@ -19,6 +19,7 @@ meta-harness generate           # compile to native config for all enabled targe
 meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
 meta-harness status             # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets            # list supported targets
+meta-harness explain <category> # what to write in a source file, and where it lands
 meta-harness --help             # all commands + examples
 ```
 
@@ -31,13 +32,20 @@ node_modules, no package.json. (One-off without installing:
 
 **By hand** — edit the files in `.meta-harness/` (every one is a commented
 example), run `meta-harness generate`. No agent involved.
+`meta-harness explain <category>` prints the shape of any source file.
 
-**By agent** — describe what you want in plain language in
-`.meta-harness/HARNESS.md`, then ask Claude or Codex to *"build my harness"*.
-The agent writes the category files and runs `generate`; the CLI still owns
-every write to `.claude/`, `.codex/`, and friends. `init` installs the skill
-that teaches it this (via `npx skills add`, which owns skills — meta-harness
-never writes skill directories itself). `HARNESS.md` is never compiled.
+**By agent** — ask any coding agent *"build my harness"*, with requirements
+inline, or after sketching them in `.meta-harness/HARNESS.md`, or ask to be
+interviewed. The agent writes the source files; the CLI still owns every write
+to `.claude/`, `.codex/`, and friends. `init` installs the skill that teaches
+it this — via `npx skills add`, which owns skill directories; meta-harness
+never writes them itself.
+
+The split is deliberate: **turning intent into source files is judgment
+(agent); turning source files into native config is a pure function (CLI).**
+`.meta-harness/` is always the source of truth — `HARNESS.md` is a
+plain-language record of it, never compiled, and rewritten from the files
+whenever they change.
 
 ## Source layout
 

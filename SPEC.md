@@ -165,6 +165,7 @@ meta-harness init [--no-skill]       # scaffold source dir + config, install age
 meta-harness generate [--check|--force|--dry-run] [-t <targets>] [--only <cats>] [--json]
 meta-harness status [--json]         # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets                 # list supported targets
+meta-harness explain [category]      # source file shape per category (schema lives in code)
 ```
 
 ## 8. Implementation
