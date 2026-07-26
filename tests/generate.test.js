@@ -129,7 +129,7 @@ test('cursor / opencode / agents / hermes targets', () => {
   assert.ok(read(root, '.agents/commands/ship.md').includes('ship it'))
 
   // hermes
-  const spec = readJson(root, '.hermes/rulesync/subagents/planner.json')
+  const spec = readJson(root, '.hermes/meta-harness/subagents/planner.json')
   assert.strictEqual(spec.hermes.command, 'subagent_planner')
   assert.deepStrictEqual(spec.toolsets, ['terminal', 'file', 'web'])
   assert.ok(read(root, '.hermes/plugins/meta-harness-subagents/__init__.py').includes('register_command'))

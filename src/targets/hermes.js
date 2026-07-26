@@ -22,7 +22,7 @@ from pathlib import Path
 
 
 def register(ctx):
-    specs_dir = Path(__file__).resolve().parents[2] / "rulesync" / "subagents"
+    specs_dir = Path(__file__).resolve().parents[2] / "meta-harness" / "subagents"
     if not specs_dir.is_dir():
         return
     for spec_path in sorted(specs_dir.glob("*.json")):
@@ -58,7 +58,7 @@ export default {
       const s = slug(a.name)
       out.push({
         category: 'agents',
-        path: `.hermes/rulesync/subagents/${s}.json`,
+        path: `.hermes/meta-harness/subagents/${s}.json`,
         content:
           JSON.stringify(
             {

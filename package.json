@@ -1,6 +1,6 @@
 {
   "name": "@jungsek/meta-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publishConfig": {
     "access": "public"
   },
@@ -39,7 +39,6 @@
     "agents",
     "ai-agents",
     "config",
-    "rulesync",
     "harness",
     "mcp"
   ],

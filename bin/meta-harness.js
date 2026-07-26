@@ -11,10 +11,29 @@ const pkg = JSON.parse(
   fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf8')
 )
 
+// ANSI, tty-aware; NO_COLOR respected.
+const tty = process.stdout.isTTY && !process.env.NO_COLOR
+const paint = (code) => (s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s)
+const green = paint('32')
+const red = paint('31')
+const yellow = paint('33')
+const dim = paint('2')
+const bold = paint('1')
+
 program
   .name('meta-harness')
   .description('one source dir → native config for coding-agent harnesses')
   .version(pkg.version, '-v, --version')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  meta-harness init                          scaffold .meta-harness/ with commented examples
+  meta-harness generate                      compile for all enabled targets
+  meta-harness generate --check              CI drift gate (exit 1 if stale or hand-edited)
+  meta-harness generate -t cursor --only rules   partial run (never prunes)
+  meta-harness status                        per-output: clean / EDITED / MISSING`
+  )
 
 const csv = (v) => v.split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -34,19 +53,23 @@ program
       if (opts.json) {
         console.log(JSON.stringify({ ...res, stale: check && (res.written.length > 0 || res.pruned.length > 0) }, null, 2))
       } else {
-        for (const w of res.warnings) console.warn(`warn: ${w}`)
+        for (const w of res.warnings) console.warn(yellow(`warn: ${w}`))
         const verb = check ? 'would write' : 'wrote'
-        for (const p of res.written) console.log(`  ${verb}  ${p}`)
-        for (const p of res.pruned) console.log(`  ${check ? 'would prune' : 'pruned'} ${p}`)
-        console.log(`${res.written.length} written, ${res.pruned.length} pruned, ${res.unchanged.length} unchanged`)
+        for (const p of res.written) console.log(`  ${green(verb.padEnd(11))} ${p}`)
+        for (const p of res.pruned) console.log(`  ${red((check ? 'would prune' : 'pruned').padEnd(11))} ${p}`)
+        const clean = res.written.length === 0 && res.pruned.length === 0
+        const mark = clean ? green('✔') : check ? yellow('✱') : green('✔')
+        console.log(
+          `${mark} ${res.written.length} written · ${res.pruned.length} pruned · ${dim(`${res.unchanged.length} unchanged`)}`
+        )
       }
       if (opts.check && (res.written.length || res.pruned.length)) {
-        if (!opts.json) console.error('stale — run: meta-harness generate')
+        if (!opts.json) console.error(red('stale — run: meta-harness generate'))
         process.exit(1)
       }
     } catch (e) {
       if (opts.json) console.log(JSON.stringify({ error: e.message, drifted: e.drifted ?? [] }))
-      else console.error(e.message)
+      else console.error(red(e.message))
       process.exit(1)
     }
   })
@@ -57,17 +80,31 @@ program
   .option('--json', 'machine-readable output')
   .action((opts) => {
     const rows = status(root)
+    const bad = rows.filter((r) => r.state !== 'clean' && r.state !== 'link')
     if (opts.json) console.log(JSON.stringify(rows, null, 2))
     else if (rows.length === 0) console.log('no manifest — run: meta-harness generate')
-    else for (const r of rows) console.log(`  ${r.state.padEnd(8)} ${r.path}`)
-    if (rows.some((r) => r.state !== 'clean' && r.state !== 'link')) process.exit(1)
+    else {
+      for (const r of rows) {
+        const color = r.state === 'clean' ? dim : r.state === 'link' ? dim : red
+        console.log(`  ${color(r.state.padEnd(8))} ${r.path}`)
+      }
+      console.log(
+        bad.length
+          ? red(`✘ ${bad.length} of ${rows.length} outputs need attention — port changes to the source, then: meta-harness generate --force`)
+          : green(`✔ all clean (${rows.length} outputs)`)
+      )
+    }
+    if (bad.length) process.exit(1)
   })
 
 program
   .command('targets')
-  .description('list supported targets')
+  .description('list supported targets (✔ = enabled in config)')
   .action(() => {
-    for (const name of Object.keys(registry)) console.log(name)
+    const cfg = loadConfig(root)
+    const enabled = new Set(cfg.targets.includes('*') ? Object.keys(registry) : cfg.targets)
+    for (const name of Object.keys(registry))
+      console.log(`  ${enabled.has(name) ? green('✔') : ' '} ${name}`)
   })
 
 program
@@ -93,7 +130,10 @@ program
       )
       created++
     }
-    console.log(created ? `initialized ${cfg.sourceDir}/ (${created} files)` : `${cfg.sourceDir}/ already initialized`)
+    if (created) {
+      console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
+      console.log(`\n${bold('next:')}\n  1. edit ${cfg.sourceDir}/ — every file is a commented example\n  2. meta-harness generate`)
+    } else console.log(`${cfg.sourceDir}/ already initialized`)
   })
 
 function walk(dir, prefix = '') {
