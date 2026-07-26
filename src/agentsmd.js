@@ -70,7 +70,8 @@ export function emitAgentsMd(model, targetNames, ctx) {
     // refuses to write through a symlinked CLAUDE.md. If the user already
     // imports AGENTS.md themselves, their file is complete as-is.
     const existing = readIf(path.join(ctx.root, 'CLAUDE.md'))
-    if (existing === null || existing.includes(START) || !existing.includes('@AGENTS.md'))
+    // Line-anchored: `@AGENTS.md` only imports when it stands on its own line.
+    if (existing === null || existing.includes(START) || !/^@AGENTS\.md\s*$/m.test(existing))
       out.push({ category: 'rules', path: 'CLAUDE.md', markerFile: true, block: CLAUDE_STUB })
   }
   return out
