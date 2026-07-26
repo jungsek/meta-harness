@@ -146,4 +146,5 @@ function walk(dir, prefix = '') {
   return out
 }
 
+if (process.argv.length <= 2) program.help()
 program.parse()
