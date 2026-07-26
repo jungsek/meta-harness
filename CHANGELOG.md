@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.2 — 2026-07-27
+
+- **Fixes silent data loss on first adoption.** `detectDrift` only ever
+  iterated manifest entries, so an empty manifest meant zero checks — and the
+  first `generate` in a repo that already had `.claude/` config destroyed
+  hand-written files with no warning. That is the run every adopter performs.
+  Any output path that exists on disk but is absent from the manifest is now
+  treated as unmanaged: `generate` refuses and names the paths, and `--force`
+  is the explicit adoption opt-in. Shared files and the `AGENTS.md` block are
+  exempt — they merge rather than replace, so existing content already
+  survives on its own terms.
+
 ## 0.10.1 — 2026-07-27
 
 - **Reverts the 0.10.0 Codex rules mechanism, which did not work.**

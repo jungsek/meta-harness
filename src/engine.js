@@ -84,6 +84,25 @@ const loadManifest = (root, cfg) => {
 // Owned-key subset hash for a shared file — foreign-key edits never count as drift.
 const ownedHashOf = (data, ownedKeys) => sha256(canonicalJson(pick(data, ownedKeys)))
 
+// A path we are about to write that already exists but was never recorded in
+// the manifest is someone's hand-written config, not ours. The manifest-based
+// check below can't see it — an empty manifest means zero checks — so without
+// this the very first generate in an already-configured repo destroys files
+// silently. That first run is exactly when adopters have the most to lose.
+function detectUnmanaged(root, files, manifest) {
+  const out = []
+  for (const f of files) {
+    if (manifest.files[f.path]) continue
+    const abs = path.join(root, f.path)
+    if (!fs.existsSync(abs) && !isLink(abs)) continue
+    // Shared files and the AGENTS.md block merge rather than replace, so
+    // existing content survives on its own terms.
+    if (f.shared || f.markerFile) continue
+    out.push(f.path)
+  }
+  return out
+}
+
 function detectDrift(root, manifest) {
   const drifted = []
   for (const [rel, entry] of Object.entries(manifest.files)) {
@@ -138,10 +157,15 @@ export function generate(root, { check = false, force = false, only = null, targ
   const { files, warnings } = discover(root, cfg, { only, targetNames })
   const result = { written: [], pruned: [], drifted: [], unchanged: [], warnings }
 
-  result.drifted = detectDrift(root, manifest)
+  const unmanaged = detectUnmanaged(root, files, manifest)
+  result.drifted = [...new Set([...detectDrift(root, manifest), ...unmanaged])]
   if (result.drifted.length && !force) {
+    const adopting = unmanaged.length === result.drifted.length
     const err = new Error(
-      `refusing to overwrite hand-edited outputs (use --force to discard):\n  ${result.drifted.join('\n  ')}`
+      (adopting
+        ? `refusing to overwrite existing config meta-harness did not write (use --force to adopt these paths):`
+        : `refusing to overwrite hand-edited outputs (use --force to discard):`) +
+        `\n  ${result.drifted.join('\n  ')}`
     )
     err.drifted = result.drifted
     throw err

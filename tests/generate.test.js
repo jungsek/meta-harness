@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { generate, status } from '../src/engine.js'
+import { isLink } from '../src/util.js'
 
 const write = (root, rel, content) => {
   fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true })
@@ -371,4 +372,21 @@ test('native permission knobs live with the permissions they modify', () => {
   assert.match(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'), /approval_policy = "on-request"/)
   const claude = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'))
   assert.strictEqual(claude.defaultMode, 'acceptEdits')
+})
+
+test('first generate refuses to destroy pre-existing config it did not write', () => {
+  const root = fixture()
+  // adopter's hand-written command, at a path we are about to claim
+  fs.mkdirSync(path.join(root, '.claude/commands'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/commands/ship.md'), 'MY COMMAND\n')
+  fs.writeFileSync(path.join(root, '.meta-harness/commands/ship.md'), '---\ndescription: d\n---\nGenerated\n')
+
+  // The manifest is empty on a first run, so the manifest-based drift check
+  // sees nothing — this is the case that used to silently clobber.
+  assert.throws(() => generate(root), /did not write/)
+  assert.strictEqual(fs.readFileSync(path.join(root, '.claude/commands/ship.md'), 'utf8'), 'MY COMMAND\n')
+
+  // --force is the explicit adoption opt-in
+  generate(root, { force: true })
+  assert.ok(isLink(path.join(root, '.claude/commands/ship.md')), 'adopted after --force')
 })
