@@ -39,6 +39,11 @@ package.json/node_modules to the project).
 4. Hook events are canonical PascalCase in Claude-shaped entries
    (`hooks/hooks.jsonc`). A warning that an event was skipped for a target is
    expected behavior, not an error.
+   - Codex: new/changed `.codex/hooks.json` entries silently DON'T run until
+     trusted once interactively (open `codex` in the project, accept "Trust
+     all and continue"). After that they fire headless too.
+   - `$CLAUDE_PROJECT_DIR` only exists in Claude hooks — give codex (and
+     others) a per-target override with cwd-relative paths.
 5. Per-file `targets: ["..."]` frontmatter controls which targets receive a
    rule/agent/command. Agent files take per-target override blocks
    (`claude:`, `cursor:`, …).
