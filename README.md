@@ -122,7 +122,7 @@ replace a server wholesale; `null` deletes it for that target:
 ## CI
 
 ```yaml
-- run: npx meta-harness generate --check   # fails if outputs are stale or hand-edited
+- run: npx @jungsek/meta-harness generate --check   # fails if outputs are stale or hand-edited
 ```
 
 `generate --json` and `status --json` for machines.
