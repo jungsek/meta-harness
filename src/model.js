@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import matter from 'gray-matter'
 import { parse as parseToml } from 'smol-toml'
+import { parsePermissions } from './permissions.js'
 import { listMd, readIf, readJsonc } from './util.js'
 
 export const KNOWN_TARGETS = ['claude', 'codex', 'agents', 'cursor', 'opencode', 'hermes']
@@ -176,6 +177,7 @@ export function loadModel(srcDir) {
     hooks: parseHooks(srcDir, issues),
     env: parseEnv(srcDir, issues),
     plugins: null,
+    permissions: null,
     settings: { claude: null, codex: null },
     issues,
   }
@@ -186,6 +188,13 @@ export function loadModel(srcDir) {
   } catch (e) {
     err(issues, pluginsFile, e.message)
   }
+  const permFile = path.join(srcDir, 'permissions/permissions.jsonc')
+  try {
+    model.permissions = parsePermissions(readJsonc(permFile), permFile, issues)
+  } catch (e) {
+    err(issues, permFile, e.message)
+  }
+
   const clFile = path.join(srcDir, 'settings/claude.settings.jsonc')
   try {
     model.settings.claude = readJsonc(clFile)

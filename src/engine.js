@@ -66,8 +66,8 @@ function discover(root, cfg, { only, targetNames }) {
       files.push(o)
       continue
     }
-    const cur = sharedMap.get(o.sharedFile) ?? { format: o.format, data: {} }
-    mergeFragments(cur.data, o.data)
+    const cur = sharedMap.get(o.sharedFile) ?? { format: o.format, data: {}, owners: new Map() }
+    mergeFragments(cur.data, o.data, '', cur.owners, `${o.category}/`)
     sharedMap.set(o.sharedFile, cur)
   }
   for (const [rel, { format, data }] of sharedMap)

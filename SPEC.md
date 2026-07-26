@@ -206,8 +206,18 @@ meta-harness show                    # what the harness contains, derived from s
    meta-harness owns a marker-delimited block inside it (§6a) rather than
    leaving those targets ruleless. The file itself stays the user's:
    everything outside the block is preserved and never counts as drift.
-3. Permissions are ordinary settings keys (`permissions` block in
-   `settings/claude.settings.jsonc`; `approval_policy`/`sandbox_mode` in
-   `settings/codex.config.toml`). No unified permissions format — each
-   dialect written natively.
+3. ~~Permissions are ordinary settings keys; no unified format.~~
+   **Reversed 2026-07-27.** The original reasoning — that translating
+   permissions between dialects risks security bugs — did not survive
+   checking the actual mapping: `allow`/`deny`/`ask` exist in both dialects
+   with identical meaning. Leaving them unmapped meant Codex had *no*
+   per-command enforcement at all, only coarse `approval_policy`/
+   `sandbox_mode`; every agent evaluated against the tool flagged it.
+   `permissions/permissions.jsonc` now compiles to Claude's `permissions`
+   block and to `.codex/rules/meta-harness.rules` Starlark `prefix_rule`s.
+   Verified end to end against codex 0.145: a `deny` produces
+   `decision = "forbidden"` and Codex refuses the command — **but only in a
+   trusted directory**, so `generate` warns about it. Declaring permissions
+   in both `permissions/` and `settings/` is a hard error.
+   `approval_policy`/`sandbox_mode` remain plain settings keys.
 4. Publishable npm CLI from day 1; plain ESM, no build step.

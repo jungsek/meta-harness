@@ -34,13 +34,17 @@ export const readJsonc = (p) => {
 
 // Deterministic deep merge; throws on scalar/shape conflict so fragment
 // collisions are hard errors, not last-wins.
-export function mergeFragments(base, add, keyPath = '') {
+export function mergeFragments(base, add, keyPath = '', owners = new Map(), source = '?') {
   for (const [k, v] of Object.entries(add)) {
     const at = keyPath ? `${keyPath}.${k}` : k
-    if (!(k in base)) base[k] = v
-    else if (isObj(base[k]) && isObj(v)) mergeFragments(base[k], v, at)
+    if (!(k in base)) {
+      base[k] = v
+      claimAll(v, at, owners, source) // nested paths too, so a later collision can name us
+    } else if (isObj(base[k]) && isObj(v)) mergeFragments(base[k], v, at, owners, source)
     else if (JSON.stringify(base[k]) !== JSON.stringify(v))
-      throw new Error(`fragment collision on "${at}": two sources define different values`)
+      throw new Error(
+        `fragment collision on "${at}": ${owners.get(at) ?? 'one source'} and ${source} set different values — declare it in only one of them`
+      )
   }
   return base
 }
@@ -55,6 +59,12 @@ export function overlay(base, add) {
 }
 
 const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x)
+
+// Record this source as owner of a key and everything beneath it.
+function claimAll(value, at, owners, source) {
+  owners.set(at, source)
+  if (isObj(value)) for (const [k, v] of Object.entries(value)) claimAll(v, `${at}.${k}`, owners, source)
+}
 
 export const sortKeys = (x) => {
   if (Array.isArray(x)) return x.map(sortKeys)
