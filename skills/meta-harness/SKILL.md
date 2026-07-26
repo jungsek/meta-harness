@@ -61,7 +61,7 @@ it instead of hand-producing its output — hand-written output is exactly what
 
 Some things sit outside the compiler and are yours to handle directly:
 
-- **`AGENTS.md` / `CLAUDE.md`** — hand-authored. Every runtime reads them natively, so generating them would shadow what the user wrote.
+- **`CLAUDE.md`** — hand-authored. `AGENTS.md` is partly managed: meta-harness owns a marker-delimited block carrying the rules (Codex and Hermes have no prose rules directory), and everything outside it is the user's and preserved. Write their project prose there; never edit inside the markers.
 - **Skills** — `npx skills add <package>` owns skill directories and `skills-lock.json`.
 - **Codex hook trust** — a new or changed `.codex/hooks.json` entry silently does not run until the user opens `codex` once and accepts the trust prompt. Tell them; you cannot do it for them.
 - **Anything in `~/`** — global config is deliberately out of scope.

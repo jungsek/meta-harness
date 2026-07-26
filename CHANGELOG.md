@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — 2026-07-27
+
+- **Rules now reach Codex and Hermes.** Verified against the shipped Codex
+  binary: `.codex/rules/*.rules` is Starlark exec policy parsed by
+  `codex_execpolicy` (`prefix_rule`, `decision="allow"`), not instructions —
+  prose loads only through `core/src/agents_md.rs`, the `AGENTS.md` family.
+  Previously every rule silently missed both targets. meta-harness now owns a
+  marker-delimited block inside `AGENTS.md`:
+  - Everything outside `<!-- meta-harness:start -->…<!-- meta-harness:end -->`
+    is preserved verbatim and never counts as drift — the same ownership model
+    already used for keys in `.claude/settings.json`.
+  - Editing inside the block is drift and blocks `generate`, as with any output.
+  - Dropping the Codex/Hermes targets strips the block and keeps your prose.
+- Replaces the 0.7.0 warning, which could only tell you to duplicate rule
+  content by hand — the staleness smell the tool's own review checklist flags.
+
 ## 0.7.0 — 2026-07-27
 
 - `generate` now warns when `codex` is an enabled target, rules exist, and

@@ -285,10 +285,31 @@ test('show reports the source contents, not the outputs', () => {
   assert.ok(!out.includes('.claude/'), 'must not list generated outputs')
 })
 
-test('warns when codex is enabled but no AGENTS.md carries the rules', () => {
+test('rules reach codex through a managed AGENTS.md block, preserving user prose', () => {
   const root = fixture()
-  const warned = () => generate(root).warnings.some((w) => w.includes('AGENTS.md'))
-  assert.ok(warned(), 'rules targeting codex with no AGENTS.md must warn')
-  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# project\n')
-  assert.ok(!warned(), 'warning must clear once AGENTS.md exists')
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# My Project\n\nProse I wrote.\n')
+  generate(root)
+  const md = () => fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
+  assert.match(md(), /Prose I wrote/, 'user prose survives')
+  assert.match(md(), /meta-harness:start/, 'managed block added')
+
+  // Editing outside the block is the user's business, not drift.
+  fs.appendFileSync(path.join(root, 'AGENTS.md'), '\nMore of my prose.\n')
+  assert.strictEqual(generate(root).drifted.length, 0, 'prose edits must not drift')
+  assert.match(md(), /More of my prose/)
+
+  // Editing inside it is drift — that content is generated.
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), md().replace('meta-harness:start -->', 'meta-harness:start -->\nTAMPERED'))
+  assert.deepStrictEqual(generate(root, { force: true }).drifted, ['AGENTS.md'])
+})
+
+test('dropping the codex target strips the block but keeps the prose', () => {
+  const root = fixture()
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nKeep me.\n')
+  generate(root)
+  fs.writeFileSync(path.join(root, 'meta-harness.jsonc'), '{ "targets": ["claude"] }')
+  generate(root)
+  const md = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')
+  assert.match(md, /Keep me/, 'prose survives pruning')
+  assert.ok(!md.includes('meta-harness:start'), 'block removed')
 })
