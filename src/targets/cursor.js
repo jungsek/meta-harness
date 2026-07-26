@@ -19,30 +19,12 @@ const EVENT_MAP = {
 // ${VAR} → ${env:VAR} in string values (cursor's env-ref syntax).
 const envRefs = (x) => JSON.parse(JSON.stringify(x).replace(/\$\{(\w+)\}/g, '${env:$1}'))
 
-// .mdc frontmatter is hand-rolled: cursor requires unquoted comma-joined globs.
-function mdc(rule) {
-  const c = rule.fm.cursor ?? {}
-  const globs = c.globs ?? rule.fm.globs ?? rule.fm.paths ?? []
-  const lines = ['---']
-  const alwaysApply = c.alwaysApply ?? (globs.length === 0 ? true : undefined)
-  if (alwaysApply !== undefined) lines.push(`alwaysApply: ${alwaysApply}`)
-  if (rule.fm.description) lines.push(`description: ${rule.fm.description.replace(/\n+/g, ' ').trim()}`)
-  if (globs.length) lines.push(`globs: ${globs.join(',')}`)
-  lines.push('---', '', rule.body, '')
-  return lines.join('\n')
-}
-
 export default {
   name: 'cursor',
   emit(model, ctx) {
     const out = []
 
-    for (const r of model.rules.filter((r) => wants(r, 'cursor')))
-      out.push({
-        category: 'rules',
-        path: path.join('.cursor/rules', `${path.basename(r.file, '.md')}.mdc`),
-        content: mdc(r),
-      })
+    // rules reach Cursor via AGENTS.md, which it reads natively (agentsmd.js)
 
     for (const c of model.commands.filter((c) => wants(c, 'cursor'))) {
       const fm = { ...(c.fm.description ? { description: c.fm.description } : {}), ...(c.fm.cursor ?? {}) }

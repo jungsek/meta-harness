@@ -66,7 +66,7 @@ it instead of hand-producing its output — hand-written output is exactly what
 
 Some things sit outside the compiler and are yours to handle directly:
 
-- **`CLAUDE.md`** — hand-authored. `AGENTS.md` is partly managed: meta-harness owns a marker-delimited block carrying the rules (Codex and Hermes have no prose rules directory), and everything outside it is the user's and preserved. Write their project prose there; never edit inside the markers.
+- **`AGENTS.md` and `CLAUDE.md`** — partly managed. Rules compile into one marker-delimited block in `AGENTS.md` (the single prose channel — every runtime reads it natively except Claude, which gets a generated `CLAUDE.md` stub importing `@AGENTS.md`). Everything outside the markers is the user's and preserved. Write their project prose there; never edit inside the markers.
 - **Skills** — `npx skills add <package>` owns skill directories and `skills-lock.json`.
 - **Codex directory trust** — project hooks *and* exec policies (`.codex/rules/`) load only after the user opens `codex` once and accepts the trust prompt. Until then a `deny` permission silently does not stop anything, verified against codex 0.145. Tell them; you cannot do it for them.
 - **Anything in `~/`** — global config is deliberately out of scope.

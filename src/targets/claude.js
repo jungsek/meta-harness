@@ -29,7 +29,7 @@ export default {
     const link = (category, dir) => (item) =>
       out.push({ category, path: path.join(dir, path.basename(item.file)), symlinkTo: item.file })
 
-    model.rules.filter((r) => wants(r, 'claude')).forEach(link('rules', '.claude/rules'))
+    // rules reach Claude via the generated CLAUDE.md → @AGENTS.md import (agentsmd.js)
     model.commands.filter((c) => wants(c, 'claude')).forEach(link('commands', '.claude/commands'))
 
     for (const a of model.agents.filter((a) => wants(a, 'claude'))) {

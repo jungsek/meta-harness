@@ -48,11 +48,7 @@ export default {
   emit(model, ctx) {
     const out = []
     const agents = model.agents.filter((a) => wants(a, 'hermes'))
-    if (!agents.length) {
-      if (model.rules.length && model.rules.some((r) => r.targets.includes('hermes')))
-        ctx.warnings.push('hermes: rules are not emitted — Hermes reads the hand-authored AGENTS.md natively')
-      return out
-    }
+    if (!agents.length) return out
 
     for (const a of agents) {
       const s = slug(a.name)

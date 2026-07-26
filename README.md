@@ -82,7 +82,7 @@ machine-local overlay, gitignore it):
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
-| rules/ | `.claude/rules/` (symlink) | `AGENTS.md` block ¹ | `.cursor/rules/*.mdc` | `.opencode/memories/` + `instructions[]` | `.agents/memories/` | `AGENTS.md` block ¹ |
+| rules/ | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
 | agents/ | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/*.md` | JSON specs + Python plugin |
 | commands/ | `.claude/commands/` (symlink) | — ² | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — ² |
 | mcp.jsonc | `.mcp.json` | `[mcp_servers]` in config.toml ³ | `.cursor/mcp.json` | `opencode.json` `mcp`+`tools` ³ | — | — ² |
@@ -92,13 +92,15 @@ machine-local overlay, gitignore it):
 | permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — | — |
 | settings/ | rest of settings.json | rest of config.toml | — | — | — | — |
 
-¹ Codex and Hermes have no project rules directory for prose, and no additive
-project-doc mechanism: `project_doc_fallback_filenames` is a true fallback,
-used only when `AGENTS.md` is absent (measured, codex 0.145). So rules reach
-them through a marker-delimited block in `AGENTS.md`. **The file stays yours:**
-everything outside `<!-- meta-harness:start -->…<!-- meta-harness:end -->` is
-preserved verbatim and never counts as drift. Path-scoped rules are skipped
-here and warned about, since `AGENTS.md` loads unconditionally.
+¹ One prose channel: all rules compile into a marker-delimited block in
+`AGENTS.md`, which codex, cursor, opencode, hermes, and `.agents` runtimes
+read natively. Claude Code doesn't, so it gets a generated `CLAUDE.md`
+containing `@AGENTS.md` — a real file, never a symlink (Claude refuses to
+write through a symlinked `CLAUDE.md`); if your `CLAUDE.md` already imports
+`AGENTS.md`, it's left alone. **Both files stay yours:** everything outside
+`<!-- meta-harness:start -->…<!-- meta-harness:end -->` is preserved verbatim
+and never counts as drift. `paths:`/`globs:` on a rule is an error —
+`AGENTS.md` loads unconditionally, so there is no conditional-load channel.
 ² Global-only in that tool (`~/`); meta-harness never writes outside the project.
 ³ Real dialect translation per target — field renames, `type` handling,
 `${VAR}` env-ref syntax, `disabled`→`enabled`, tool filters.

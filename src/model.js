@@ -168,8 +168,15 @@ function parseEnv(srcDir, issues) {
 
 export function loadModel(srcDir) {
   const issues = []
+  const rules = parseMdDir(srcDir, 'rules', issues)
+  // Rules live in one shared AGENTS.md, which every runtime loads in full,
+  // unconditionally. There is no conditional-load channel left, so a
+  // path-scoped rule would silently apply everywhere — reject it instead.
+  for (const r of rules)
+    if (r.fm.paths || r.fm.globs)
+      err(issues, r.file, `paths:/globs: is not supported — rules load unconditionally via AGENTS.md; scope by prose instead`)
   const model = {
-    rules: parseMdDir(srcDir, 'rules', issues),
+    rules,
     agents: parseAgents(srcDir, issues),
     commands: parseMdDir(srcDir, 'commands', issues),
     mcp: parseMcp(srcDir, issues),
