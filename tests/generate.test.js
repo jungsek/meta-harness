@@ -86,6 +86,8 @@ test('claude + codex output matrix', () => {
   assert.ok(settings.hooks.PostToolUse && settings.hooks.SessionEnd)
   assert.deepStrictEqual(settings.env, { FOO: 'bar' })
   assert.strictEqual(settings.model, 'opus')
+  // record, not array — an array makes Claude skip the whole settings file
+  assert.deepStrictEqual(settings.enabledPlugins, { caveman: true })
   const codexHooks = readJson(root, '.codex/hooks.json')
   assert.ok(codexHooks.hooks.PostToolUse)
   assert.ok(!codexHooks.hooks.SessionEnd, 'codex-unsupported event skipped')
