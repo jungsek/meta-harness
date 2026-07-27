@@ -110,7 +110,7 @@ sandbox_mode = "workspace-write"`,
 // by link. `verified` is only claimed where we actually measured.
 export const TARGETS = {
   claude: {
-    verified: null,
+    verified: 'claude-code 2.x (hooks, permissions, env, MCP live)',
     docs: 'https://code.claude.com/docs',
     surfaces: {
       rules: 'CLAUDE.md stub (managed block) → @AGENTS.md',
@@ -128,6 +128,8 @@ export const TARGETS = {
       'the stub is a real file, never a symlink — Claude refuses to write through a symlinked CLAUDE.md',
       '$CLAUDE_PROJECT_DIR exists only here — hook commands using it die on every other target',
       '.claude/settings.json is shared: meta-harness owns only the keys it produces',
+      'one invalid settings key makes Claude skip the ENTIRE settings.json — hooks/env/permissions die with it',
+      'project settings apply after the folder-trust prompt on first interactive open',
     ],
   },
   codex: {
@@ -195,7 +197,7 @@ export const TARGETS = {
     ],
   },
   hermes: {
-    verified: null,
+    verified: 'hermes-agent 0.18.2 (AGENTS.md rules pickup)',
     docs: null,
     surfaces: {
       rules: 'AGENTS.md block (managed) — read natively',

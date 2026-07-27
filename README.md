@@ -112,6 +112,15 @@ per-command enforcement. Codex loads project exec policies **only in a trusted
 directory**: run `codex` once and accept the prompt, or deny rules silently
 won't stop anything.
 
+**Two trust gates, verified live.** Codex: hooks and exec policy are inert
+until you run `codex` in the directory once and accept the trust + hooks
+prompts. Claude: project settings (hooks, env, permissions) apply after the
+folder-trust prompt on first interactive open — and one invalid key makes
+Claude skip the *entire* `settings.json`, which is why meta-harness compiles
+dialect-exact shapes (e.g. `enabledPlugins` as a record). Hook fire, deny
+enforcement, env injection, and MCP connection have all been verified inside
+real Claude and Codex sessions; Hermes verified reading the `AGENTS.md` block.
+
 ## Frontmatter
 
 Every source file takes `targets: ["*"]` (default) or a subset
