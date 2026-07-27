@@ -12,7 +12,7 @@ description: Safety floor — protected domains and secrets
 ---
 # Safety
 Stop for human review: migrations, auth, payments, API contracts, CI config.`,
-    goes: 'one managed block in AGENTS.md — read natively by codex, cursor, opencode, hermes, .agents; Claude reads it through a generated CLAUDE.md @AGENTS.md stub',
+    goes: 'one managed block in AGENTS.md — read natively by codex, cursor, opencode, hermes; Claude reads it through a generated CLAUDE.md @AGENTS.md stub',
   },
   agents: {
     where: '<sourceDir>/agents/*.md',
@@ -27,7 +27,7 @@ hermes:
   toolsets: ["terminal", "file"]
 ---
 Output a numbered plan with acceptance checks. Never write code.`,
-    goes: 'all six targets, each in its native encoding',
+    goes: 'all five targets, each in its native encoding',
   },
   commands: {
     where: '<sourceDir>/commands/*.md',
@@ -37,7 +37,7 @@ Output a numbered plan with acceptance checks. Never write code.`,
 description: Verify the harness compiled cleanly
 ---
 Run \`meta-harness status\` and report whether every output is clean.`,
-    goes: 'claude (symlink), agents, cursor, opencode. codex prompts are global-only.',
+    goes: 'claude (symlink), cursor, opencode. codex prompts are global-only.',
   },
   connections: {
     where: '<sourceDir>/connections/mcp.jsonc',
@@ -182,18 +182,6 @@ export const TARGETS = {
       'no native hooks file exists — hooks compile to a generated plugin module',
       'opencode.json is shared: owned keys mcp and tools, foreign keys preserved',
       'env refs use {env:VAR}',
-    ],
-  },
-  agents: {
-    verified: null,
-    docs: 'https://agents.md',
-    surfaces: {
-      rules: 'AGENTS.md block (managed)',
-      agents: '.agents/subagents/*.md',
-      commands: '.agents/commands/*.md',
-    },
-    nuances: [
-      'a layout standard, not a runtime — consumers vary; .agents/skills/ is owned by `npx skills add`, never touched here',
     ],
   },
   hermes: {

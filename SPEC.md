@@ -2,7 +2,7 @@
 
 One-way config compiler for coding-agent harnesses. Reads a single
 source-of-truth directory (default `.meta-harness/`), emits native
-project-scope config for six targets: **claude, codex, agents (`.agents/`),
+project-scope config for five targets: **claude, codex,
 cursor, opencode, hermes**.
 
 v0.4: standalone spec — external tool comparisons removed; the product stands
@@ -60,10 +60,12 @@ npm-published CLI. All ratified decisions below still stand.
   `.opencode/plugins/meta-harness-hooks.js` (no native hooks file exists).
   `opencode.json` is a shared file: owned keys `mcp`, `tools`; foreign keys
   preserved.
-- **agents** (`.agents/` standard): commands → `.agents/commands/`, agents →
-  `.agents/subagents/`. Skills stay with `npx skills add`. (Codex reads only
-  `.agents/skills/` and `.agents/plugins/marketplace.json` from this tree —
-  verified codex 0.145.)
+- **agents target DROPPED (2026-07-27):** the `.agents/` layout's only
+  verified content is `.agents/skills/` (owned by `npx skills add`; Codex
+  reads only `skills/` and `plugins/marketplace.json` from that tree —
+  verified codex 0.145). The `.agents/commands|subagents` files the target
+  emitted had no confirmed reader; speculative output deleted. Existing
+  outputs prune automatically on the next generate.
 - **hermes**: subagents only (`.hermes/meta-harness/
   subagents/*.json` specs + `.hermes/plugins/meta-harness-subagents/`
   Python plugin registering each as a `delegate_task` command). MCP/hooks/

@@ -97,7 +97,7 @@ test('claude + codex output matrix', () => {
   assert.match(codexCfg, /FOO = "bar"/)
 })
 
-test('cursor / opencode / agents / hermes targets', () => {
+test('cursor / opencode / hermes targets', () => {
   const root = fixture({ targets: '["*"]' })
   generate(root)
 
@@ -129,10 +129,8 @@ test('cursor / opencode / agents / hermes targets', () => {
   assert.match(plugin, /new RegExp\("Write\|Edit"\)\.test\(input\.tool\)/)
   assert.ok(!plugin.includes('bye.sh'), 'SessionEnd has no opencode equivalent')
 
-  // agents — no memories; rules come via AGENTS.md
-  assert.ok(!fs.existsSync(path.join(root, '.agents/memories')), 'no .agents/memories emitted')
-  assert.ok(read(root, '.agents/subagents/planner.md').includes('name: planner'))
-  assert.ok(read(root, '.agents/commands/ship.md').includes('ship it'))
+  // the .agents/ tree belongs to `npx skills add` — no target emits into it
+  assert.ok(!fs.existsSync(path.join(root, '.agents')), 'nothing emitted under .agents/')
 
   // hermes
   const spec = readJson(root, '.hermes/meta-harness/subagents/planner.json')

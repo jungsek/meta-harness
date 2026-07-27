@@ -11,7 +11,7 @@ ever silently overwritten.
 
 ```
 .meta-harness/          →   generate   →   .claude/  .codex/  .cursor/
-(source of truth,                          .opencode/  .agents/  .hermes/
+(source of truth,                          .opencode/  .hermes/
  you write this)                           .mcp.json  opencode.json
                                            (outputs, never hand-edit)
 ```
@@ -54,22 +54,22 @@ Unknown directories are ignored, so `scripts/`, `docs/` etc. can live there.
 Every markdown file takes `targets: ["*"]` (default) or a subset. Agent files
 additionally take per-target override blocks (`claude:`, `cursor:`, `hermes:`).
 
-## The six targets, and what each gets
+## The five targets, and what each gets
 
-Running with `targets: ["*"]` on a scaffolded project produces 17 files
+Running with `targets: ["*"]` on a scaffolded project produces 15 files
 (the commented-out example MCP config compiles to nothing until you define a
 server):
 
-| Source | claude | codex | cursor | opencode | agents | hermes |
-|---|---|---|---|---|---|---|
-| rules | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
-| agents | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/` | JSON specs + Python plugin |
-| commands | `.claude/commands/` (symlink) | — global-only | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — global-only |
-| connections | `.mcp.json` | `[mcp_servers]` in config.toml | `.cursor/mcp.json` | `opencode.json` | — | — global-only |
-| hooks | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin | — | — global-only |
-| env | `env` in settings.json | `[shell_environment_policy]` | — | — | — | — |
-| plugins | `enabledPlugins` | — | — | — | — | — |
-| permissions | `permissions` block | `.codex/rules/*.rules` (Starlark) | — | — | — | — |
+| Source | claude | codex | cursor | opencode | hermes |
+|---|---|---|---|---|---|
+| rules | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
+| agents | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | JSON specs + Python plugin |
+| commands | `.claude/commands/` (symlink) | — global-only | `.cursor/commands/` | `.opencode/commands/` | — global-only |
+| connections | `.mcp.json` | `[mcp_servers]` in config.toml | `.cursor/mcp.json` | `opencode.json` | — global-only |
+| hooks | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin | — global-only |
+| env | `env` in settings.json | `[shell_environment_policy]` | — | — | — |
+| plugins | `enabledPlugins` | — | — | — | — |
+| permissions | `permissions` block | `.codex/rules/*.rules` (Starlark) | — | — | — |
 | settings | rest of settings.json | rest of config.toml | — | — | — | — |
 
 ¹ One prose channel: a marker-delimited block in `AGENTS.md`; everything
