@@ -5,7 +5,10 @@ import { parse as parseToml } from 'smol-toml'
 import { parsePermissions } from './permissions.js'
 import { listMd, readIf, readJsonc } from './util.js'
 
-export const KNOWN_TARGETS = ['claude', 'codex', 'agents', 'cursor', 'opencode', 'hermes']
+// 'agents' (the .agents/ layout) was dropped as a target 2026-07-27: its only
+// verified content is .agents/skills/, owned by `npx skills add`, and nothing
+// we could emit there (commands/subagents) has a confirmed reader.
+export const KNOWN_TARGETS = ['claude', 'codex', 'cursor', 'opencode', 'hermes']
 
 // Canonical hook events: PascalCase (both major runtimes use it natively).
 // Each target module declares which subset it supports.

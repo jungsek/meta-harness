@@ -2,7 +2,9 @@
 
 One-way config compiler for coding-agent harnesses: a single source-of-truth
 directory compiles to native project config for **Claude Code, Codex CLI,
-Cursor, OpenCode, Hermes Agent, and the `.agents/` standard**.
+Cursor, OpenCode, and Hermes Agent**. (Skills in `.agents/skills/` belong to
+`npx skills add` — meta-harness installs its own skill there and otherwise
+stays out.)
 
 Write your rules, subagents, commands, MCP servers, hooks, and settings once —
 `generate` compiles them into each tool's native dialect. Project scope only,
@@ -21,7 +23,7 @@ meta-harness status             # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets            # list supported targets
 meta-harness show               # what this harness contains (derived from source)
 meta-harness explain <name>     # source file shape per category, or a target's manual
-meta-harness uninstall          # remove everything it wrote (--purge: source + skill too)
+meta-harness uninstall          # remove every trace: outputs, source, config, installed skill
 meta-harness --help             # all commands + examples
 ```
 
@@ -75,26 +77,26 @@ machine-local overlay, gitignore it):
 {
   "$schema": "https://raw.githubusercontent.com/jungsek/meta-harness/main/schema/meta-harness.schema.json",
   "sourceDir": ".meta-harness",       // point anywhere, e.g. ".harness"
-  "targets": ["claude", "codex"]      // or "*" for all six
+  "targets": ["claude", "codex"]      // or "*" for all five
 }
 ```
 
 ## Output matrix
 
-| Source | claude | codex | cursor | opencode | agents | hermes |
-|---|---|---|---|---|---|---|
-| rules/ | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
-| agents/ | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | `.agents/subagents/*.md` | JSON specs + Python plugin |
-| commands/ | `.claude/commands/` (symlink) | — ² | `.cursor/commands/` | `.opencode/commands/` | `.agents/commands/` | — ² |
-| mcp.jsonc | `.mcp.json` | `[mcp_servers]` in config.toml ³ | `.cursor/mcp.json` | `opencode.json` `mcp`+`tools` ³ | — | — ² |
-| hooks.jsonc | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin ⁴ | — | — ² |
-| env.jsonc | `env` in settings.json | `[shell_environment_policy]` | — | — | — | — |
-| plugins.jsonc | `enabledPlugins` | — | — | — | — | — |
-| permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — | — |
-| settings/ | rest of settings.json | rest of config.toml | — | — | — | — |
+| Source | claude | codex | cursor | opencode | hermes |
+|---|---|---|---|---|---|
+| rules/ | `CLAUDE.md` stub → `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ | `AGENTS.md` block ¹ |
+| agents/ | `.claude/agents/*.md` | `.codex/agents/*.toml` | `.cursor/agents/*.md` | `.opencode/agents/*.md` | JSON specs + Python plugin |
+| commands/ | `.claude/commands/` (symlink) | — ² | `.cursor/commands/` | `.opencode/commands/` | — ² |
+| mcp.jsonc | `.mcp.json` | `[mcp_servers]` in config.toml ³ | `.cursor/mcp.json` | `opencode.json` `mcp`+`tools` ³ | — ² |
+| hooks.jsonc | `hooks` in settings.json | `.codex/hooks.json` | `.cursor/hooks.json` | generated JS plugin ⁴ | — ² |
+| env.jsonc | `env` in settings.json | `[shell_environment_policy]` | — | — | — |
+| plugins.jsonc | `enabledPlugins` | — | — | — | — |
+| permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — |
+| settings/ | rest of settings.json | rest of config.toml | — | — | — |
 
 ¹ One prose channel: all rules compile into a marker-delimited block in
-`AGENTS.md`, which codex, cursor, opencode, hermes, and `.agents` runtimes
+`AGENTS.md`, which codex, cursor, opencode, and hermes
 read natively. Claude Code doesn't, so it gets a generated `CLAUDE.md`
 containing `@AGENTS.md` — a real file, never a symlink (Claude refuses to
 write through a symlinked `CLAUDE.md`); if your `CLAUDE.md` already imports

@@ -13,9 +13,6 @@ const REPO_SIGNALS = {
   codex: ['.codex'],
   cursor: ['.cursor'],
   opencode: ['opencode.json', '.opencode'],
-  // .agents/ alone usually just means skills (owned by `npx skills add`) —
-  // only the layout dirs this tool would emit count.
-  agents: ['.agents/subagents', '.agents/commands', '.agents/memories'],
   hermes: ['.hermes'],
 }
 
@@ -24,7 +21,6 @@ const BINARIES = {
   codex: ['codex'],
   cursor: ['cursor-agent', 'cursor'],
   opencode: ['opencode'],
-  agents: [],
   hermes: ['hermes'],
 }
 

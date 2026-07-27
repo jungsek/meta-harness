@@ -3,7 +3,7 @@ name: meta-harness
 description: >-
   Build, change, and audit a project's coding-agent harness — the rules,
   subagents, slash commands, MCP servers, hooks, and permissions that configure
-  Claude Code, Codex CLI, Cursor, OpenCode, Hermes, and .agents — from one
+  Claude Code, Codex CLI, Cursor, OpenCode, and Hermes — from one
   source directory that compiles to all of them. Use this skill whenever
   someone wants to set up or change how agents behave in a repo — "build my
   harness", adding or editing rules/subagents/commands/hooks/MCP servers,
@@ -19,7 +19,7 @@ meta-harness compiles one source directory into every coding agent's native
 config. You write the source; the CLI writes every output.
 
 - **`<sourceDir>/`** (default `.meta-harness/`, set by `sourceDir` in `meta-harness.jsonc`) — the source of truth. Yours to edit.
-- **`.claude/ .codex/ .cursor/ .opencode/ .agents/ .hermes/ .mcp.json opencode.json`** — compiled outputs. Editing these by hand is what the tool exists to prevent: `generate` refuses to overwrite hand edits, so a change made there blocks the next build instead of surviving it. Put the change in the source and it reaches every tool at once.
+- **`.claude/ .codex/ .cursor/ .opencode/ .hermes/ .mcp.json opencode.json`** — compiled outputs. Editing these by hand is what the tool exists to prevent: `generate` refuses to overwrite hand edits, so a change made there blocks the next build instead of surviving it. Put the change in the source and it reaches every tool at once.
 - **`HARNESS-INIT.md`** in the source root — the user's plain-language request. Input only, never compiled.
 
 Three commands answer most questions, so ask the tool rather than guessing:

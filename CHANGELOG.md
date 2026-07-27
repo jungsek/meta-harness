@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.16.0 — 2026-07-27
+
+- **The `agents` target is gone.** The `.agents/` layout's only verified
+  content is `.agents/skills/` — owned by `npx skills add`, and Codex reads
+  only `skills/` and `plugins/marketplace.json` from that tree (measured).
+  The `.agents/commands|subagents` files the target emitted had no confirmed
+  reader anywhere; speculative output deleted. Five targets remain. Existing
+  `.agents` outputs prune automatically on the next generate; a config or
+  frontmatter still naming `agents` gets a clear unknown-target error. This
+  also removes the `explain agents` category/target name collision.
+- **`init` now guarantees Claude can see the installed skill.** `npx skills
+  add` mirrors into `.claude/skills/` only when it detects a *Claude* agent
+  driving the terminal — run from Codex, a plain shell, or CI it writes
+  `.agents/skills/` alone, which Claude Code does not read, so `/meta-harness`
+  silently didn't exist. init now creates the
+  `.claude/skills/meta-harness → .agents/skills/meta-harness` symlink itself
+  (idempotent; uninstall already removes it). Verified live: fresh init →
+  both a real Claude session (`/meta-harness` from `.claude/skills/`) and a
+  real Codex session report the skill available.
+
 ## 0.15.0 — 2026-07-27
 
 - **`uninstall` now removes every trace by default** (the 0.14.0 `--purge`

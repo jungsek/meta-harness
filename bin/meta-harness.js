@@ -126,6 +126,19 @@ function installSkill() {
     cwd: root,
     stdio: 'inherit',
   })
+  if (r.status !== 0) return false
+  // `skills add` mirrors the skill into .claude/skills/ only when it detects
+  // a Claude agent driving the terminal — from Codex, a plain shell, or CI it
+  // writes .agents/skills/ alone, which Claude Code does not read. Ensure the
+  // mirror ourselves so the skill works in every runtime regardless of where
+  // init ran. (Codex reads .agents/skills natively; no mirror needed there.)
+  const skillDir = path.join(root, '.agents/skills/meta-harness')
+  const mirror = path.join(root, '.claude/skills/meta-harness')
+  if (fs.existsSync(skillDir) && !fs.existsSync(mirror)) {
+    fs.mkdirSync(path.dirname(mirror), { recursive: true })
+    fs.symlinkSync(path.relative(path.dirname(mirror), skillDir), mirror)
+    console.log(dim('linked .claude/skills/meta-harness → .agents/skills/meta-harness (Claude does not read .agents)'))
+  }
   return r.status === 0
 }
 
@@ -155,9 +168,6 @@ program
       console.log(`\n${dim('meta-harness explain <category|target>')}`)
       return
     }
-    // `agents` is both a category and a target; category wins — the target
-    // reading is available via `explain` with no argument to discover, and
-    // the category (subagent file shape) is what people ask for.
     const text = explain(name, bold) ?? explainTarget(name, bold, dim)
     if (!text) {
       console.error(
