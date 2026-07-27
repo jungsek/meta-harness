@@ -29,6 +29,14 @@ export function spliceBlock(existing, block) {
   const s = existing.indexOf(START)
   const e = existing.indexOf(END)
   if (s !== -1 && e !== -1 && e > s) return existing.slice(0, s) + block + existing.slice(e + END.length)
+  // A stray unpaired marker would make the next extract pair across user
+  // prose and read as permanent drift — strip marker lines so a forced
+  // write converges to a clean state instead.
+  if (s !== -1 || e !== -1)
+    existing = existing
+      .split('\n')
+      .filter((l) => !l.includes(START) && !l.includes(END))
+      .join('\n')
   // No block yet — append, keeping their prose first since it's the file's point.
   return `${existing.trimEnd()}\n\n${block}\n`
 }
