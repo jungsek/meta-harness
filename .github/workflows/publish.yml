@@ -1,0 +1,28 @@
+name: publish
+
+# Publishes to npm via OIDC trusted publishing — no NPM_TOKEN secret, no
+# browser auth. One-time setup on npmjs.com (requires owner login):
+# package Settings → Trusted Publishers → GitHub Actions →
+#   repository jungsek/meta-harness, workflow publish.yml.
+# Then: git tag vX.Y.Z && git push --tags
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --access public
