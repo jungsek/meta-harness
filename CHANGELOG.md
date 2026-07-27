@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.0 — 2026-07-27
+
+- **`uninstall` now removes every trace by default** (the 0.14.0 `--purge`
+  split is gone): outputs via the kind-aware prune, then the source dir,
+  `meta-harness.jsonc`, the installed skill at `.agents/skills/meta-harness`,
+  the `.claude/skills/meta-harness` symlink `npx skills add` creates
+  (dangling-link aware), and the package's own entry in `skills-lock.json`
+  (other skills' entries untouched; file deleted only when empty). Emptied
+  parent dirs are tidied. User prose, foreign keys, and other skills survive;
+  hand-edited outputs still refuse without `--force`; the sourceDir
+  root-escape guard stays. Verified: a real init+generate tree uninstalls to
+  a completely empty directory.
+
 ## 0.14.0 — 2026-07-27
 
 - **`init` auto-detects targets.** Repo signals (`.claude/`, `.codex/`,

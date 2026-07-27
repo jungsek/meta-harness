@@ -238,20 +238,20 @@ program
 
 program
   .command('uninstall')
-  .description('remove everything meta-harness wrote (kind-aware: your prose and foreign keys survive)')
+  .description('remove every trace: outputs, source dir, config, installed skill (your prose and foreign keys survive)')
   .option('--force', 'discard hand-edits to generated outputs')
-  .option('--purge', 'also remove the source dir, meta-harness.jsonc, and the installed agent skill')
   .option('--check', 'dry-run; list what would be removed')
   .option('--json', 'machine-readable output')
   .action((opts) => {
     try {
-      const res = uninstall(root, { force: opts.force, purge: opts.purge, check: opts.check })
+      const res = uninstall(root, { force: opts.force, check: opts.check })
       if (opts.json) {
         console.log(JSON.stringify(res, null, 2))
       } else {
+        for (const w of res.warnings) console.warn(yellow(`warn: ${w}`))
         const verb = opts.check ? 'would remove' : 'removed'
         for (const p of res.pruned) console.log(`  ${red(verb.padEnd(12))} ${p}`)
-        console.log(`${green('✔')} ${res.pruned.length} ${verb}${opts.purge ? '' : dim('  (source kept — --purge removes it too)')}`)
+        console.log(`${green('✔')} ${res.pruned.length} ${verb}`)
       }
     } catch (e) {
       if (opts.json) console.log(JSON.stringify({ error: e.message, drifted: e.drifted ?? [] }))
