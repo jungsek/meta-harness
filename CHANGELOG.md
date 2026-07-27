@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0 — 2026-07-27
+
+- **`init` auto-detects targets.** Repo signals (`.claude/`, `.codex/`,
+  `.cursor/`, `opencode.json`/`.opencode/`, `.hermes/`, `.agents/`
+  layout dirs) union machine signals (the tool's binary on PATH), evidence
+  printed per target. Deterministic — no prompts (the agent stays the
+  wizard); `init --targets a,b` overrides, nothing detected falls back to
+  `["claude","codex"]`, and an existing `meta-harness.jsonc` is never
+  rewritten. `AGENTS.md` is deliberately not a signal — half the targets
+  read it, it discriminates nothing.
+- **`meta-harness uninstall`** — teardown for testing and clean exits. Every
+  manifest-tracked output is removed the kind-aware way (marker files lose
+  only the managed block, shared files lose only owned keys, plain files
+  deleted with empty parent dirs tidied), then the manifest. Hand-edited
+  outputs refuse without `--force` — same contract as generate. `--purge`
+  also removes the source dir, `meta-harness.jsonc`, and the installed agent
+  skill; `--check` dry-runs.
+
 ## 0.13.2 — 2026-07-27
 
 Live-enforcement verification round: hooks, permissions, env, and MCP were

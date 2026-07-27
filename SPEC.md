@@ -171,12 +171,15 @@ Corollary: no interactive `init` wizard. The agent is the wizard.
 ## 7. CLI surface
 
 ```
-meta-harness init [--no-skill]       # scaffold source dir + config, install agent skill
+meta-harness init [--no-skill] [-t <targets>]  # scaffold + config; targets auto-detected
+                                     # (repo config dirs ∪ binaries on PATH; deterministic, no prompts)
 meta-harness generate [--check|--force|--dry-run] [-t <targets>] [--only <cats>] [--json]
 meta-harness status [--json]         # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets                 # list supported targets
-meta-harness explain [category]      # source file shape per category (schema lives in code)
+meta-harness explain [name]          # category file shape, or per-target manual
 meta-harness show                    # what the harness contains, derived from source
+meta-harness uninstall [--force|--purge|--check|--json]  # kind-aware teardown of every output;
+                                     # --purge also removes source dir, config, installed skill
 ```
 
 ## 8. Implementation

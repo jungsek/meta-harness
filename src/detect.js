@@ -1,0 +1,52 @@
+// Target detection for init: repo signals (the project already uses the tool)
+// union machine signals (its binary is on PATH). Deterministic — no prompts;
+// the CLI never gets an interactive wizard, flags override detection.
+
+import fs from 'node:fs'
+import path from 'node:path'
+import { KNOWN_TARGETS } from './model.js'
+
+// Config artifacts that mean "this repo is set up for that tool". AGENTS.md is
+// deliberately not a signal — half the targets read it, it discriminates nothing.
+const REPO_SIGNALS = {
+  claude: ['.claude'],
+  codex: ['.codex'],
+  cursor: ['.cursor'],
+  opencode: ['opencode.json', '.opencode'],
+  // .agents/ alone usually just means skills (owned by `npx skills add`) —
+  // only the layout dirs this tool would emit count.
+  agents: ['.agents/subagents', '.agents/commands', '.agents/memories'],
+  hermes: ['.hermes'],
+}
+
+const BINARIES = {
+  claude: ['claude'],
+  codex: ['codex'],
+  cursor: ['cursor-agent', 'cursor'],
+  opencode: ['opencode'],
+  agents: [],
+  hermes: ['hermes'],
+}
+
+function whichAny(names) {
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)
+  for (const n of names)
+    for (const d of dirs) {
+      try {
+        fs.accessSync(path.join(d, n), fs.constants.X_OK)
+        return n
+      } catch {}
+    }
+  return null
+}
+
+// → [{target, repo: [paths found], bin: name|null}] for every known target.
+export function detectTargets(root) {
+  return KNOWN_TARGETS.map((target) => ({
+    target,
+    repo: (REPO_SIGNALS[target] ?? []).filter((rel) => fs.existsSync(path.join(root, rel))),
+    bin: whichAny(BINARIES[target] ?? []),
+  }))
+}
+
+export const detectedNames = (rows) => rows.filter((r) => r.repo.length || r.bin).map((r) => r.target)

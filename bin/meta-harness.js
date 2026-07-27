@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
-import { DEFAULT_TARGETS, generate, loadConfig, status } from '../src/engine.js'
+import { detectTargets, detectedNames } from '../src/detect.js'
+import { DEFAULT_TARGETS, generate, loadConfig, status, uninstall } from '../src/engine.js'
 import { CATEGORIES, TARGETS, explain, explainTarget } from '../src/explain.js'
 import { loadModel } from '../src/model.js'
 import { show } from '../src/show.js'
@@ -171,6 +172,7 @@ program
   .command('init')
   .description('scaffold the source dir + config, install the agent skill (idempotent)')
   .option('--no-skill', 'skip installing the agent skill (no network calls)')
+  .option('-t, --targets <names>', 'targets to write into the config (skips detection)', csv)
   .action((opts) => {
     const cfg = loadConfig(root)
     const src = path.join(root, cfg.sourceDir)
@@ -185,11 +187,29 @@ program
     }
     const cfgPath = path.join(root, 'meta-harness.jsonc')
     if (!fs.existsSync(cfgPath)) {
+      // Pick targets: explicit flag > detection (repo config dirs union
+      // binaries on PATH) > the stock default. Deterministic, never prompts.
+      let chosen = opts.targets ?? null
+      if (!chosen) {
+        const rows = detectTargets(root)
+        const found = detectedNames(rows)
+        console.log('detecting targets…')
+        for (const r of rows) {
+          const evidence = [...r.repo.map((p) => `${p} in repo`), ...(r.bin ? [`${r.bin} on PATH`] : [])]
+          const hit = evidence.length > 0
+          console.log(`  ${(hit ? green('✔') : dim('—'))} ${r.target.padEnd(9)} ${hit ? evidence.join(' · ') : dim('nothing found')}`)
+        }
+        chosen = found.length ? found : cfg.targets
+        if (!found.length) console.log(dim(`  nothing detected — defaulting to ${cfg.targets.join(', ')}`))
+      }
       fs.writeFileSync(
         cfgPath,
-        `{\n  // source-of-truth directory\n  "sourceDir": "${cfg.sourceDir}",\n  // targets to generate (see: meta-harness targets); "*" = all\n  "targets": ${JSON.stringify(cfg.targets)}\n}\n`
+        `{\n  // source-of-truth directory\n  "sourceDir": "${cfg.sourceDir}",\n  // targets to generate (see: meta-harness targets); "*" = all\n  "targets": ${JSON.stringify(chosen)}\n}\n`
       )
+      console.log(`targets: ${JSON.stringify(chosen)}   ${dim('(edit meta-harness.jsonc, or: init --targets a,b)')}`)
       created++
+    } else if (opts.targets) {
+      console.warn(yellow('warn: meta-harness.jsonc already exists — --targets ignored, edit the file instead'))
     }
     if (created) console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
     else console.log(`${cfg.sourceDir}/ already initialized`)
@@ -214,6 +234,30 @@ program
           'tip: meta-harness is npm-installed locally — the package.json/node_modules here came from that install.\n     For a dependency-free project: npm rm @jungsek/meta-harness && npm i -g @jungsek/meta-harness'
         )
       )
+  })
+
+program
+  .command('uninstall')
+  .description('remove everything meta-harness wrote (kind-aware: your prose and foreign keys survive)')
+  .option('--force', 'discard hand-edits to generated outputs')
+  .option('--purge', 'also remove the source dir, meta-harness.jsonc, and the installed agent skill')
+  .option('--check', 'dry-run; list what would be removed')
+  .option('--json', 'machine-readable output')
+  .action((opts) => {
+    try {
+      const res = uninstall(root, { force: opts.force, purge: opts.purge, check: opts.check })
+      if (opts.json) {
+        console.log(JSON.stringify(res, null, 2))
+      } else {
+        const verb = opts.check ? 'would remove' : 'removed'
+        for (const p of res.pruned) console.log(`  ${red(verb.padEnd(12))} ${p}`)
+        console.log(`${green('✔')} ${res.pruned.length} ${verb}${opts.purge ? '' : dim('  (source kept — --purge removes it too)')}`)
+      }
+    } catch (e) {
+      if (opts.json) console.log(JSON.stringify({ error: e.message, drifted: e.drifted ?? [] }))
+      else console.error(red(e.message))
+      process.exit(1)
+    }
   })
 
 function walk(dir, prefix = '') {

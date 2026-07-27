@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { generate, status } from '../src/engine.js'
+import { generate, status, uninstall } from '../src/engine.js'
 import { isLink } from '../src/util.js'
 
 const write = (root, rel, content) => {
@@ -367,6 +367,77 @@ test('stray unpaired marker in AGENTS.md: refused unmanaged, --force converges',
   assert.match(md, /prose/, 'user prose kept')
   assert.strictEqual(md.split('<!-- meta-harness:start -->').length - 1, 1, 'single start marker')
   assert.strictEqual(generate(root).written.length, 0, 'clean and stable afterwards')
+})
+
+const BIN = path.resolve(import.meta.dirname, '../bin/meta-harness.js')
+// Strip agent binaries from PATH so machine signals don't leak into detection tests.
+const BARE_ENV = { ...process.env, PATH: '/usr/bin:/bin' }
+
+test('init detects targets from repo signals; nothing found → default', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-detect-'))
+  fs.mkdirSync(path.join(root, '.cursor'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'opencode.json'), '{}')
+  const out = execFileSync(process.execPath, [BIN, 'init', '--no-skill'], { cwd: root, env: BARE_ENV, encoding: 'utf8' })
+  assert.match(out, /\.cursor in repo/)
+  const cfg = fs.readFileSync(path.join(root, 'meta-harness.jsonc'), 'utf8')
+  assert.match(cfg, /"targets": \["cursor","opencode"\]/)
+
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-detect-'))
+  const out2 = execFileSync(process.execPath, [BIN, 'init', '--no-skill'], { cwd: bare, env: BARE_ENV, encoding: 'utf8' })
+  assert.match(out2, /nothing detected/)
+  assert.match(fs.readFileSync(path.join(bare, 'meta-harness.jsonc'), 'utf8'), /"targets": \["claude","codex"\]/)
+})
+
+test('init --targets overrides detection; existing config never rewritten', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-detect-'))
+  execFileSync(process.execPath, [BIN, 'init', '--no-skill', '--targets', 'hermes'], { cwd: root, env: BARE_ENV, encoding: 'utf8' })
+  assert.match(fs.readFileSync(path.join(root, 'meta-harness.jsonc'), 'utf8'), /"targets": \["hermes"\]/)
+  const again = execFileSync(process.execPath, [BIN, 'init', '--no-skill', '--targets', 'claude'], { cwd: root, env: BARE_ENV, encoding: 'utf8' })
+  assert.match(again, /already initialized/)
+  assert.match(fs.readFileSync(path.join(root, 'meta-harness.jsonc'), 'utf8'), /"targets": \["hermes"\]/)
+})
+
+test('uninstall removes outputs kind-aware; --purge removes source too', () => {
+  const root = fixture()
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nkeep me.\n')
+  generate(root, { force: true })
+  // hand-added foreign key must survive uninstall
+  const sp = path.join(root, '.claude/settings.json')
+  const s = JSON.parse(fs.readFileSync(sp, 'utf8'))
+  s.statusLine = { left: 'custom' }
+  fs.writeFileSync(sp, JSON.stringify(s, null, 2) + '\n')
+
+  const res = uninstall(root, {})
+  assert.ok(res.pruned.includes('CLAUDE.md'))
+  assert.match(read(root, 'AGENTS.md'), /keep me/, 'user prose survives')
+  assert.ok(!read(root, 'AGENTS.md').includes('meta-harness:start'), 'block gone')
+  assert.deepStrictEqual(JSON.parse(read(root, '.claude/settings.json')), { statusLine: { left: 'custom' } })
+  assert.ok(!fs.existsSync(path.join(root, '.claude/agents')), 'generated files gone')
+  assert.ok(!fs.existsSync(path.join(root, '.meta-harness/.manifest.json')), 'manifest gone')
+  assert.ok(fs.existsSync(path.join(root, '.meta-harness/rules')), 'source kept without --purge')
+
+  const res2 = uninstall(root, { purge: true })
+  assert.ok(res2.pruned.includes('.meta-harness'))
+  assert.ok(!fs.existsSync(path.join(root, '.meta-harness')))
+  assert.ok(!fs.existsSync(path.join(root, 'meta-harness.jsonc')))
+})
+
+test('uninstall --purge refuses a sourceDir that escapes or equals the project root', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-purge-'))
+  write(root, 'meta-harness.jsonc', '{ "sourceDir": ".", "targets": ["claude"] }')
+  write(root, 'precious.txt', 'keep')
+  const res = uninstall(root, { purge: true })
+  assert.ok(res.warnings.some((w) => w.includes('refusing')), 'warned')
+  assert.ok(fs.existsSync(path.join(root, 'precious.txt')), 'repo not deleted')
+})
+
+test('uninstall refuses on hand-edited outputs without --force', () => {
+  const root = fixture()
+  generate(root)
+  fs.appendFileSync(path.join(root, '.claude/agents/planner.md'), 'rogue\n')
+  assert.throws(() => uninstall(root, {}), /hand-edited/)
+  uninstall(root, { force: true })
+  assert.ok(!fs.existsSync(path.join(root, '.claude/agents/planner.md')))
 })
 
 test('SKILL.md frontmatter is valid YAML with name and description', async () => {
