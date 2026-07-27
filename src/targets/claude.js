@@ -41,11 +41,12 @@ export default {
       })
     }
 
-    if (model.mcp)
+    const servers = model.mcp ? resolveServers(model.mcp, 'claude') : {}
+    if (Object.keys(servers).length)
       out.push({
         category: 'connections',
         path: '.mcp.json',
-        content: JSON.stringify({ mcpServers: resolveServers(model.mcp, 'claude') }, null, 2) + '\n',
+        content: JSON.stringify({ mcpServers: servers }, null, 2) + '\n',
       })
 
     const frag = (category, data) =>

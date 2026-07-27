@@ -56,7 +56,9 @@ additionally take per-target override blocks (`claude:`, `cursor:`, `hermes:`).
 
 ## The six targets, and what each gets
 
-Running with `targets: ["*"]` on a scaffolded project produces 20 files:
+Running with `targets: ["*"]` on a scaffolded project produces 17 files
+(the commented-out example MCP config compiles to nothing until you define a
+server):
 
 | Source | claude | codex | cursor | opencode | agents | hermes |
 |---|---|---|---|---|---|---|
