@@ -97,5 +97,5 @@ built to prevent.
 
 ## Reference
 
-- `references/interview.md` — questions for the guided path
+- `references/interview.md` — guided path: mandatory repo scan, then two questions
 - `references/review.md` — gap and best-practice checklist for audits
