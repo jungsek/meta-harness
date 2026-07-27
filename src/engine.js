@@ -240,44 +240,7 @@ export function generate(root, { check = false, force = false, only = null, targ
   if (!partial) {
     for (const [rel, entry] of Object.entries(manifest.files)) {
       if (nextManifest.files[rel]) continue
-      const abs = path.join(root, rel)
-      if (entry.marker) {
-        // No longer produced: strip our block, leave the user's prose in place.
-        const raw = readIf(abs)
-        const block = raw === null ? null : extractBlock(raw)
-        if (block !== null) {
-          if (!check) {
-            const rest = raw.replace(block, '').replace(/\n{3,}/g, '\n\n').trim()
-            if (rest) writeFileEnsured(abs, rest + '\n')
-            else fs.rmSync(abs)
-          }
-          result.pruned.push(rel)
-        }
-      } else if (entry.ownedKeys) {
-        // shared file no longer produced: remove only our keys, keep foreign ones
-        const raw = readIf(abs)
-        if (raw !== null) {
-          try {
-            const data = parseByFormat(entry.format, raw)
-            const foreign = Object.fromEntries(Object.entries(data).filter(([k]) => !entry.ownedKeys.includes(k)))
-            if (!check) {
-              if (Object.keys(foreign).length) writeFileEnsured(abs, serialize(entry.format, foreign))
-              else fs.rmSync(abs)
-            }
-            result.pruned.push(rel)
-          } catch {
-            /* unparseable — leave it alone */
-          }
-        }
-      } else if (fs.existsSync(abs) || isLink(abs)) {
-        if (!check) {
-          fs.rmSync(abs)
-          try {
-            fs.rmdirSync(path.dirname(abs)) // only succeeds when empty
-          } catch {}
-        }
-        result.pruned.push(rel)
-      }
+      pruneEntry(root, rel, entry, check, result)
     }
   } else {
     for (const [rel, entry] of Object.entries(manifest.files))
@@ -285,6 +248,88 @@ export function generate(root, { check = false, force = false, only = null, targ
   }
 
   if (!check) writeFileEnsured(path.join(root, cfg.sourceDir, MANIFEST), JSON.stringify(nextManifest, null, 2) + '\n')
+  return result
+}
+
+// Remove one manifest-tracked output the way its kind demands: marker files
+// lose only our block (file deleted when nothing else remains), shared files
+// lose only our keys, plain files/symlinks are deleted with empty parent dirs.
+function pruneEntry(root, rel, entry, check, result) {
+  const abs = path.join(root, rel)
+  const rm = (p) => {
+    fs.rmSync(p)
+    try {
+      fs.rmdirSync(path.dirname(p)) // only succeeds when empty
+    } catch {}
+  }
+  if (entry.marker) {
+    const raw = readIf(abs)
+    const block = raw === null ? null : extractBlock(raw)
+    if (block !== null) {
+      if (!check) {
+        const rest = raw.replace(block, '').replace(/\n{3,}/g, '\n\n').trim()
+        if (rest) writeFileEnsured(abs, rest + '\n')
+        else rm(abs)
+      }
+      result.pruned.push(rel)
+    }
+  } else if (entry.ownedKeys) {
+    const raw = readIf(abs)
+    if (raw !== null) {
+      try {
+        const data = parseByFormat(entry.format, raw)
+        const foreign = Object.fromEntries(Object.entries(data).filter(([k]) => !entry.ownedKeys.includes(k)))
+        if (!check) {
+          if (Object.keys(foreign).length) writeFileEnsured(abs, serialize(entry.format, foreign))
+          else rm(abs)
+        }
+        result.pruned.push(rel)
+      } catch {
+        /* unparseable — leave it alone */
+      }
+    }
+  } else if (fs.existsSync(abs) || isLink(abs)) {
+    if (!check) rm(abs)
+    result.pruned.push(rel)
+  }
+}
+
+// Tear down everything meta-harness wrote: every manifest-tracked output goes
+// through the same kind-aware prune as generate (user prose and foreign keys
+// survive), then the manifest itself. `purge` also removes the source dir,
+// meta-harness.jsonc, and the installed agent skill — full teardown for
+// testing. Hand-edited outputs refuse without `force`, same contract as
+// generate: uninstall must not silently discard work either.
+export function uninstall(root, { force = false, purge = false, check = false } = {}) {
+  const cfg = loadConfig(root)
+  const manifest = loadManifest(root, cfg)
+  const result = { pruned: [], drifted: [], warnings: [] }
+  result.drifted = detectDrift(root, manifest)
+  if (result.drifted.length && !force) {
+    const err = new Error(
+      `refusing to remove hand-edited outputs (use --force to discard):\n  ${result.drifted.join('\n  ')}`
+    )
+    err.drifted = result.drifted
+    throw err
+  }
+  for (const [rel, entry] of Object.entries(manifest.files)) pruneEntry(root, rel, entry, check, result)
+  const manifestPath = path.join(root, cfg.sourceDir, MANIFEST)
+  if (!check && fs.existsSync(manifestPath)) fs.rmSync(manifestPath)
+  if (purge) {
+    const rootAbs = path.resolve(root)
+    for (const rel of [cfg.sourceDir, 'meta-harness.jsonc', '.agents/skills/meta-harness']) {
+      const abs = path.resolve(root, rel)
+      // sourceDir comes from user config — "." would purge the repo itself,
+      // "../x" would escape it. Only delete strict descendants of root.
+      if (abs === rootAbs || !abs.startsWith(rootAbs + path.sep)) {
+        result.warnings.push(`purge: refusing "${rel}" — resolves outside the project (or to it)`)
+        continue
+      }
+      if (!fs.existsSync(abs)) continue
+      if (!check) fs.rmSync(abs, { recursive: true })
+      result.pruned.push(rel)
+    }
+  }
   return result
 }
 

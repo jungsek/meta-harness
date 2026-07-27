@@ -14,13 +14,14 @@ npm install -g @jungsek/meta-harness
 ```
 
 ```
-meta-harness init               # scaffold source dir + config, install the agent skill
+meta-harness init               # scaffold source dir + config; targets auto-detected, skill installed
 meta-harness generate           # compile to native config for all enabled targets
 meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
 meta-harness status             # manifest vs disk: clean / EDITED / MISSING
 meta-harness targets            # list supported targets
 meta-harness show               # what this harness contains (derived from source)
-meta-harness explain <category> # what to write in a source file, and where it lands
+meta-harness explain <name>     # source file shape per category, or a target's manual
+meta-harness uninstall          # remove everything it wrote (--purge: source + skill too)
 meta-harness --help             # all commands + examples
 ```
 
