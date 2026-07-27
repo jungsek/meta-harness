@@ -31,9 +31,9 @@ currently contains).
 
 Users arrive three ways. All converge on the same middle.
 
-1. **They wrote a request** — `HARNESS-INIT.md` exists. Read it and build.
+1. **They wrote a request** — `HARNESS-INIT.md` exists *and they edited it*. `init` scaffolds that file with an example request below "Replace everything below." (targets claude+codex, planner/reviewer subagents, the deepwiki MCP server, a session-start timestamp hook). If that example is still what the file says, the user wrote nothing — building from it produces a harness nobody asked for. Treat it as case 3.
 2. **They just asked** — "build my harness, claude and codex, agents stop before payments." Build from what they said, defaulting anything they clearly don't care about. A harness that exists beats one that was perfectly specified.
-3. **They want guidance** — walk them through `references/interview.md`.
+3. **They gave no intent** — offer two paths and let them pick: a guided interview (`references/interview.md`), or the recommended baseline (`references/baseline.md`) merged with anything they have said.
 
 Then, every time:
 
@@ -98,4 +98,5 @@ built to prevent.
 ## Reference
 
 - `references/interview.md` — guided path: mandatory repo scan, then two questions
+- `references/baseline.md` — recommended floor when the user gives no intent; merge, never copy
 - `references/review.md` — gap and best-practice checklist for audits
