@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.1 — 2026-07-28
+
+- **An untouched `HARNESS-INIT.md` no longer builds a phantom harness.** The
+  scaffold ships the file with an example request; an agent reading it could
+  not tell placeholder from intent and would build the example verbatim
+  (deepwiki server, timestamp hook, subagents nobody asked for — observed
+  live on a fresh init). The skill now names the placeholder and treats it
+  as "no intent": offer a guided interview or the new recommended baseline
+  (`references/baseline.md` — source-of-truth + git + safety rules with
+  their enforcing denies, targets only as detected, merged with anything
+  the user did say, never copied). The scaffold states the same contract
+  for agents that read it without the skill.
+
 ## 0.16.0 — 2026-07-27
 
 - **The `agents` target is gone.** The `.agents/` layout's only verified

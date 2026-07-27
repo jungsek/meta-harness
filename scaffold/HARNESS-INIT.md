@@ -12,7 +12,9 @@ and nothing reads it but you and your agent.
 You don't need this file at all if you'd rather just tell the agent what you
 want, or have it interview you.
 
-Replace everything below.
+Replace everything below. An untouched copy of this example is not a request
+— an agent that finds it unedited should offer the interview or the
+recommended baseline instead of building it.
 
 ---
 
