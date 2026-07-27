@@ -397,9 +397,16 @@ test('init --targets overrides detection; existing config never rewritten', () =
   assert.match(fs.readFileSync(path.join(root, 'meta-harness.jsonc'), 'utf8'), /"targets": \["hermes"\]/)
 })
 
-test('uninstall removes outputs kind-aware; --purge removes source too', () => {
+test('uninstall removes every trace; prose, foreign keys, and other skills survive', () => {
   const root = fixture()
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nkeep me.\n')
+  write(root, '.agents/skills/meta-harness/SKILL.md', 'skill')
+  write(root, '.agents/skills/other-skill/SKILL.md', 'other')
+  write(
+    root,
+    'skills-lock.json',
+    JSON.stringify({ version: 1, skills: { 'meta-harness': { source: 'x' }, 'other-skill': { source: 'y' } } })
+  )
   generate(root, { force: true })
   // hand-added foreign key must survive uninstall
   const sp = path.join(root, '.claude/settings.json')
@@ -409,24 +416,24 @@ test('uninstall removes outputs kind-aware; --purge removes source too', () => {
 
   const res = uninstall(root, {})
   assert.ok(res.pruned.includes('CLAUDE.md'))
+  assert.ok(res.pruned.includes('.meta-harness'))
   assert.match(read(root, 'AGENTS.md'), /keep me/, 'user prose survives')
   assert.ok(!read(root, 'AGENTS.md').includes('meta-harness:start'), 'block gone')
   assert.deepStrictEqual(JSON.parse(read(root, '.claude/settings.json')), { statusLine: { left: 'custom' } })
   assert.ok(!fs.existsSync(path.join(root, '.claude/agents')), 'generated files gone')
-  assert.ok(!fs.existsSync(path.join(root, '.meta-harness/.manifest.json')), 'manifest gone')
-  assert.ok(fs.existsSync(path.join(root, '.meta-harness/rules')), 'source kept without --purge')
-
-  const res2 = uninstall(root, { purge: true })
-  assert.ok(res2.pruned.includes('.meta-harness'))
-  assert.ok(!fs.existsSync(path.join(root, '.meta-harness')))
-  assert.ok(!fs.existsSync(path.join(root, 'meta-harness.jsonc')))
+  assert.ok(!fs.existsSync(path.join(root, '.meta-harness')), 'source dir gone')
+  assert.ok(!fs.existsSync(path.join(root, 'meta-harness.jsonc')), 'config gone')
+  assert.ok(!fs.existsSync(path.join(root, '.agents/skills/meta-harness')), 'skill gone')
+  assert.ok(fs.existsSync(path.join(root, '.agents/skills/other-skill')), 'other skills kept')
+  const lock = JSON.parse(read(root, 'skills-lock.json'))
+  assert.ok(!lock.skills['meta-harness'] && lock.skills['other-skill'], 'only our lock entry removed')
 })
 
-test('uninstall --purge refuses a sourceDir that escapes or equals the project root', () => {
+test('uninstall refuses a sourceDir that escapes or equals the project root', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-purge-'))
   write(root, 'meta-harness.jsonc', '{ "sourceDir": ".", "targets": ["claude"] }')
   write(root, 'precious.txt', 'keep')
-  const res = uninstall(root, { purge: true })
+  const res = uninstall(root, {})
   assert.ok(res.warnings.some((w) => w.includes('refusing')), 'warned')
   assert.ok(fs.existsSync(path.join(root, 'precious.txt')), 'repo not deleted')
 })

@@ -294,13 +294,13 @@ function pruneEntry(root, rel, entry, check, result) {
   }
 }
 
-// Tear down everything meta-harness wrote: every manifest-tracked output goes
+// Tear down every trace of meta-harness: all manifest-tracked outputs go
 // through the same kind-aware prune as generate (user prose and foreign keys
-// survive), then the manifest itself. `purge` also removes the source dir,
-// meta-harness.jsonc, and the installed agent skill — full teardown for
-// testing. Hand-edited outputs refuse without `force`, same contract as
-// generate: uninstall must not silently discard work either.
-export function uninstall(root, { force = false, purge = false, check = false } = {}) {
+// survive), then the manifest, the source dir, meta-harness.jsonc, the
+// installed agent skill, and its skills-lock.json entry. Hand-edited outputs
+// refuse without `force`, same contract as generate: uninstall must not
+// silently discard work either.
+export function uninstall(root, { force = false, check = false } = {}) {
   const cfg = loadConfig(root)
   const manifest = loadManifest(root, cfg)
   const result = { pruned: [], drifted: [], warnings: [] }
@@ -313,21 +313,52 @@ export function uninstall(root, { force = false, purge = false, check = false } 
     throw err
   }
   for (const [rel, entry] of Object.entries(manifest.files)) pruneEntry(root, rel, entry, check, result)
-  const manifestPath = path.join(root, cfg.sourceDir, MANIFEST)
-  if (!check && fs.existsSync(manifestPath)) fs.rmSync(manifestPath)
-  if (purge) {
-    const rootAbs = path.resolve(root)
-    for (const rel of [cfg.sourceDir, 'meta-harness.jsonc', '.agents/skills/meta-harness']) {
-      const abs = path.resolve(root, rel)
-      // sourceDir comes from user config — "." would purge the repo itself,
-      // "../x" would escape it. Only delete strict descendants of root.
-      if (abs === rootAbs || !abs.startsWith(rootAbs + path.sep)) {
-        result.warnings.push(`purge: refusing "${rel}" — resolves outside the project (or to it)`)
-        continue
+
+  const rootAbs = path.resolve(root)
+  // .claude/skills/meta-harness is the symlink `npx skills add` creates so
+  // Claude sees the .agents skill — dangling once the target goes.
+  for (const rel of [cfg.sourceDir, 'meta-harness.jsonc', '.agents/skills/meta-harness', '.claude/skills/meta-harness']) {
+    const abs = path.resolve(root, rel)
+    // sourceDir comes from user config — "." would delete the repo itself,
+    // "../x" would escape it. Only delete strict descendants of root.
+    if (abs === rootAbs || !abs.startsWith(rootAbs + path.sep)) {
+      result.warnings.push(`refusing "${rel}" — resolves outside the project (or to it)`)
+      continue
+    }
+    // existsSync follows symlinks — a dangling skill symlink needs isLink
+    if (!fs.existsSync(abs) && !isLink(abs)) continue
+    if (!check) {
+      fs.rmSync(abs, { recursive: true })
+      // tidy .agents/skills → .agents when the skill was the last thing there
+      let dir = path.dirname(abs)
+      while (dir !== rootAbs) {
+        try {
+          fs.rmdirSync(dir)
+        } catch {
+          break
+        }
+        dir = path.dirname(dir)
       }
-      if (!fs.existsSync(abs)) continue
-      if (!check) fs.rmSync(abs, { recursive: true })
-      result.pruned.push(rel)
+    }
+    result.pruned.push(rel)
+  }
+
+  // skills-lock.json is shared with other skills — remove only our entry.
+  const lockPath = path.join(root, 'skills-lock.json')
+  const lockRaw = readIf(lockPath)
+  if (lockRaw !== null) {
+    try {
+      const lock = JSON.parse(lockRaw)
+      if (lock.skills?.['meta-harness']) {
+        delete lock.skills['meta-harness']
+        if (!check) {
+          if (Object.keys(lock.skills).length) fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n')
+          else fs.rmSync(lockPath)
+        }
+        result.pruned.push('skills-lock.json (meta-harness entry)')
+      }
+    } catch {
+      result.warnings.push('skills-lock.json unparseable — left alone')
     }
   }
   return result
