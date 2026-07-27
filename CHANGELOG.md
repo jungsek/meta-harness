@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.2 — 2026-07-27
+
+Live-enforcement verification round: hooks, permissions, env, and MCP were
+exercised inside real Claude Code and Codex sessions (including the Codex
+directory-trust and hooks-trust dialogs, driven interactively).
+
+- **Critical: `enabledPlugins` was emitted as an array, and Claude rejects
+  the entire settings file over it.** Claude expects a record
+  (`{"name@marketplace": true}`); given the scaffold's `[]`, Claude reported
+  "Expected record, but received array" and **skipped `.claude/settings.json`
+  wholesale — silently killing hooks, env, permissions, and settings** for
+  every adopter with a plugins file. The source stays a list; the Claude
+  emitter now compiles it to a record, and an empty list emits nothing.
+- Verified live after the fix, per runtime:
+  - Claude: SessionStart hook fires; `deny` blocks the exact command
+    ("Permission … has been denied"); env vars reach Bash; `.mcp.json`
+    servers load (needs folder trust, as designed).
+  - Codex: after directory + hooks trust, hooks fire, `.codex/rules` exec
+    policy blocks the exact forbidden command, `[shell_environment_policy]`
+    applies.
+
 ## 0.13.1 — 2026-07-27
 
 Three real defects from an independent Codex adversarial audit (a fourth

@@ -57,7 +57,12 @@ export default {
       const events = resolveEvents(model.hooks, 'claude', EVENTS, ctx.warnings)
       if (Object.keys(events).length) frag('hooks', { hooks: events })
     }
-    if (model.plugins) frag('plugins', { enabledPlugins: model.plugins.enabledPlugins })
+    // Claude wants a record ({"name@marketplace": true}), not a list — a list
+    // makes Claude reject the ENTIRE settings.json ("skipped entirely"),
+    // silently killing hooks/env/permissions with it. Source stays a list.
+    const plugins = model.plugins?.enabledPlugins ?? []
+    const pluginRec = Array.isArray(plugins) ? Object.fromEntries(plugins.map((p) => [p, true])) : plugins
+    if (Object.keys(pluginRec).length) frag('plugins', { enabledPlugins: pluginRec })
     if (model.permissions) {
       const p = toClaudePermissions(model.permissions)
       if (Object.keys(p).length) frag('permissions', { permissions: p })
