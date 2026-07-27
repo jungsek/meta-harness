@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { emitAgentsMd, extractBlock, spliceBlock } from './agentsmd.js'
+import { emitAgentsMd, END, extractBlock, START, spliceBlock } from './agentsmd.js'
 import { loadModel } from './model.js'
 import { targets as registry } from './targets/index.js'
 import {
@@ -95,9 +95,26 @@ function detectUnmanaged(root, files, manifest) {
     if (manifest.files[f.path]) continue
     const abs = path.join(root, f.path)
     if (!fs.existsSync(abs) && !isLink(abs)) continue
-    // Shared files and the AGENTS.md block merge rather than replace, so
-    // existing content survives on its own terms.
-    if (f.shared || f.markerFile) continue
+    // Shared files and marker files merge rather than replace, so existing
+    // content normally survives on its own terms — but only when the merge
+    // can actually see it. An unparseable shared file would be overwritten
+    // wholesale, and a stray unpaired marker would make the next extract
+    // pair across user prose. Both get the same refusal as any other
+    // unmanaged path instead of a silent lossy write.
+    if (f.shared) {
+      try {
+        parseByFormat(f.format, fs.readFileSync(abs, 'utf8'))
+        continue
+      } catch {
+        out.push(f.path)
+        continue
+      }
+    }
+    if (f.markerFile) {
+      const raw = fs.readFileSync(abs, 'utf8')
+      if ((raw.includes(START) || raw.includes(END)) && extractBlock(raw) === null) out.push(f.path)
+      continue
+    }
     out.push(f.path)
   }
   return out
@@ -126,7 +143,10 @@ function detectDrift(root, manifest) {
 }
 
 // Merge tool-owned keys into an existing shared file, preserving foreign keys.
-function mergeShared(root, out, prevOwned, warnings) {
+// A full run drops previously-owned keys that are no longer produced (that is
+// how a removed category leaves the file); a partial run didn't look at every
+// category, so keys owned by unselected ones must survive untouched.
+function mergeShared(root, out, prevOwned, warnings, partial) {
   const existingRaw = readIf(path.join(root, out.path))
   let merged = out.data
   if (existingRaw !== null) {
@@ -139,15 +159,16 @@ function mergeShared(root, out, prevOwned, warnings) {
     }
     merged = {}
     for (const [k, v] of Object.entries(existing)) {
-      const owned = out.keys.includes(k) || (prevOwned ?? []).includes(k)
-      if (!owned) merged[k] = v // foreign key — preserved verbatim
+      const owned = out.keys.includes(k) || (!partial && (prevOwned ?? []).includes(k))
+      if (!owned) merged[k] = v // foreign or partial-run-retained key — preserved verbatim
     }
     for (const [k, v] of Object.entries(out.data)) {
-      if (k in merged) warnings.push(`${out.path}: overwriting foreign key "${k}" (now owned)`)
+      if (k in merged && !(prevOwned ?? []).includes(k)) warnings.push(`${out.path}: overwriting foreign key "${k}" (now owned)`)
       merged[k] = v
     }
   }
-  return { content: serialize(out.format, merged), finalData: merged }
+  const ownedKeys = partial ? [...new Set([...out.keys, ...(prevOwned ?? [])])] : out.keys
+  return { content: serialize(out.format, merged), finalData: merged, ownedKeys }
 }
 
 export function generate(root, { check = false, force = false, only = null, targets = null } = {}) {
@@ -192,12 +213,12 @@ export function generate(root, { check = false, force = false, only = null, targ
       entry = { marker: true, blockHash: sha256(out.block) }
     } else if (out.shared) {
       const prev = manifest.files[out.path]
-      const m = mergeShared(root, out, prev?.ownedKeys, warnings)
+      const m = mergeShared(root, out, prev?.ownedKeys, warnings, Boolean(only || targets))
       content = m.content
       entry = {
         format: out.format,
-        ownedKeys: out.keys,
-        ownedHash: ownedHashOf(m.finalData, out.keys),
+        ownedKeys: m.ownedKeys,
+        ownedHash: ownedHashOf(m.finalData, m.ownedKeys),
       }
     } else {
       content = out.content

@@ -331,6 +331,42 @@ test('codex: servers all filtered out (bad names) emit no [mcp_servers], with wa
   assert.ok(res.warnings.some((w) => w.includes('bad name!')))
 })
 
+test('first generate refuses an unparseable pre-existing shared file (no silent overwrite)', () => {
+  const root = fixture()
+  fs.mkdirSync(path.join(root, '.codex'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.codex/config.toml'), 'not valid toml: [\n')
+  assert.throws(() => generate(root), /did not write/)
+  assert.strictEqual(read(root, '.codex/config.toml'), 'not valid toml: [\n', 'file untouched')
+  generate(root, { force: true }) // explicit opt-in still works
+  assert.match(read(root, '.codex/config.toml'), /approval_policy/)
+})
+
+test('--only partial run preserves shared-file keys owned by unselected categories', () => {
+  const root = fixture()
+  generate(root)
+  const before = read(root, '.codex/config.toml')
+  assert.match(before, /\[mcp_servers\.files\]/)
+  const res = generate(root, { only: ['env'] })
+  assert.ok(!res.drifted.length)
+  const after = read(root, '.codex/config.toml')
+  assert.match(after, /\[mcp_servers\.files\]/, 'connection keys survive an env-only run')
+  assert.match(after, /FOO = "bar"/)
+  // and the manifest keeps the union of ownership — a following full run stays clean
+  const full = generate(root)
+  assert.strictEqual(full.written.length, 0)
+})
+
+test('stray unpaired marker in AGENTS.md: refused unmanaged, --force converges', () => {
+  const root = fixture()
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Mine\n\nprose\n\n<!-- meta-harness:start -->\n')
+  assert.throws(() => generate(root), /did not write/)
+  generate(root, { force: true })
+  const md = read(root, 'AGENTS.md')
+  assert.match(md, /prose/, 'user prose kept')
+  assert.strictEqual(md.split('<!-- meta-harness:start -->').length - 1, 1, 'single start marker')
+  assert.strictEqual(generate(root).written.length, 0, 'clean and stable afterwards')
+})
+
 test('SKILL.md frontmatter is valid YAML with name and description', async () => {
   const matter = (await import('gray-matter')).default
   const raw = fs.readFileSync(path.resolve(import.meta.dirname, '../skills/meta-harness/SKILL.md'), 'utf8')

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.13.1 — 2026-07-27
+
+Three real defects from an independent Codex adversarial audit (a fourth
+finding was disproven against the running CLI):
+
+- **First generate no longer overwrites an unparseable pre-existing shared
+  file.** A hand-written but malformed `.codex/config.toml` (or any shared
+  output) used to be replaced wholesale at exit 0 with only a warning — the
+  one gap left in the 0.10.2 adoption guard. Unparseable + unmanaged now gets
+  the same refusal as any other pre-existing path; `--force` remains the
+  opt-in.
+- **`--only`/`-t` partial runs no longer delete shared-file keys owned by
+  unselected categories.** `generate --only env` used to strip
+  `[mcp_servers]` out of `.codex/config.toml` and drop its ownership from the
+  manifest — a destructive act from a run advertised as non-pruning. Partial
+  runs now preserve previously-owned keys and record the ownership union.
+- **A stray unpaired marker no longer causes permanent self-drift.** A
+  pre-existing lone `<!-- meta-harness:start -->` made every regenerate pair
+  it against the appended block's end and refuse forever. Now: refused
+  up-front as unmanaged; `--force` strips the stray marker lines and
+  converges to a clean, stable state.
+
 ## 0.13.0 — 2026-07-27
 
 Findings from a full end-to-end pass over the published package: fresh
