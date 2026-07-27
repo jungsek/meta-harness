@@ -1,52 +1,53 @@
 # Guided harness interview
 
-For users who want to be walked through it. Conversational, not a form — ask
-in batches, accept "I don't know," and default anything they don't care about.
-A harness that exists beats a harness that was fully specified.
+For users who want to be walked through it. Conversational, not a form —
+accept "I don't know," and default anything they don't care about. A harness
+that exists beats a harness that was fully specified.
 
-Six questions. Stop early the moment you have enough to build something real.
+Two questions. Everything else comes from the repo scan.
 
-## 1. Which tools?
+## 0. Scan first — mandatory, before asking anything
 
-"Which coding agents do you actually use here — Claude Code, Codex, Cursor,
-OpenCode?"
+Most interview answers are already in the repo. Read before you ask:
 
-Default `["claude", "codex"]`. Only add targets for tools they really run;
-unused targets are files nobody reads.
+- **Tools in use** → existing `.claude/` `.codex/` `.cursor/` `.opencode/`
+  config, lockfiles of agent CLIs, CI workflows that invoke them. That IS the
+  targets list; don't ask which tools they use.
+- **Day-one knowledge** → README, CONTRIBUTING, existing AGENTS.md/CLAUDE.md
+  prose, package.json scripts, directory layout. Draft `rules/` from what's
+  there; show, don't interrogate.
+- **Automation candidates** → format/lint/test scripts worth a PostToolUse
+  hook, `.env.example` names worth `env/`, MCP servers already configured
+  anywhere.
+- **Existing hand config** → anything `generate` would collide with. Plan the
+  adoption path (`--force` after review), never silently claim files.
 
-## 2. What should agents never do?
+State what the scan concluded in two or three lines and let them correct it.
+A correction is cheaper than six questions.
 
-The highest-value question — ask it early. Prompts for protected domains
-(auth, payments, migrations, CI config, deletions), secrets, and git limits.
-Becomes `rules/safety.md`, plus `permissions` deny entries in
-`settings/claude.settings.jsonc` where a rule can be mechanically enforced.
+## 1. What should agents never do?
 
-A rule states intent; a permission enforces it. Do both when the thing matters.
+The one question the repo cannot answer — it's about intent, not code.
+Prompts for protected domains (auth, payments, migrations, CI config,
+deletions), secrets, git limits. Becomes `rules/safety.md`, plus
+`permissions/permissions.jsonc` deny entries where a rule can be mechanically
+enforced.
 
-## 3. What should an agent know on day one?
+A rule states intent; a permission enforces it. Do both when the thing
+matters.
 
-Project shape, stack, conventions, where things live, what "done" means.
-Becomes `rules/`, one file per concept — not one giant rule. Split by what a
-reader would look up separately.
+## 2. Anything the scan missed or got wrong?
 
-## 4. Any specialists worth having?
-
-"Is there a job you'd want a dedicated subagent for — planning, reviewing,
-research?" Becomes `agents/`. Skip if nothing comes to mind; subagents nobody
-invokes are dead weight.
-
-## 5. Anything to automate on every session?
-
-Logging, context injection, guards on dangerous tools. Becomes `hooks/`.
-Warn them Codex requires a one-time interactive trust before its hooks run.
-
-## 6. Any MCP servers or env vars?
-
-Becomes `connections/mcp.jsonc` and `env/env.jsonc`. Fine to leave empty.
+Show the plan derived from the scan (targets, draft rules, hooks, env) and
+ask for one round of corrections. Specialists (`agents/`) belong here — offer
+one only if a clear recurring job surfaced (review, planning, research);
+subagents nobody invokes are dead weight.
 
 ## After the interview
 
 Build it, run `generate`, then `meta-harness show` so they can see what they
 now have. Describe what changed in their own words, and name the one or two
 things you'd add next — don't dump the whole gap list. Don't write a summary
-file; `show` is the summary.
+file; `show` is the summary. Warn once about the two trust gates: Codex needs
+a one-time interactive trust for hooks/exec-policy; Claude asks for folder
+trust on first open.
