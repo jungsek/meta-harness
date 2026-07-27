@@ -313,6 +313,31 @@ test('explain <target> prints surfaces, nuances, and verified version', () => {
   assert.match(cat, /Subagent definitions/)
 })
 
+test('empty mcpServers map emits no connection outputs', () => {
+  const root = fixture({ targets: '["*"]' })
+  write(root, '.meta-harness/connections/mcp.jsonc', '{ "mcpServers": {} }')
+  generate(root)
+  assert.ok(!fs.existsSync(path.join(root, '.mcp.json')), 'no empty .mcp.json')
+  assert.ok(!fs.existsSync(path.join(root, '.cursor/mcp.json')), 'no empty .cursor/mcp.json')
+  assert.ok(!read(root, '.codex/config.toml').includes('mcp_servers'), 'no empty [mcp_servers] table')
+  assert.ok(!fs.existsSync(path.join(root, 'opencode.json')), 'no empty opencode.json')
+})
+
+test('codex: servers all filtered out (bad names) emit no [mcp_servers], with warnings', () => {
+  const root = fixture()
+  write(root, '.meta-harness/connections/mcp.jsonc', '{ "mcpServers": { "bad name!": { "command": "x" } } }')
+  const res = generate(root)
+  assert.ok(!read(root, '.codex/config.toml').includes('mcp_servers'))
+  assert.ok(res.warnings.some((w) => w.includes('bad name!')))
+})
+
+test('SKILL.md frontmatter is valid YAML with name and description', async () => {
+  const matter = (await import('gray-matter')).default
+  const raw = fs.readFileSync(path.resolve(import.meta.dirname, '../skills/meta-harness/SKILL.md'), 'utf8')
+  const { data } = matter(raw) // throws on the unquoted-colon class of bug that broke `npx skills add`
+  assert.ok(data.name && data.description)
+})
+
 test('show reports the source contents, not the outputs', () => {
   const root = fixture()
   const out = execFileSync('node', [path.resolve(import.meta.dirname, '../bin/meta-harness.js'), 'show'], {

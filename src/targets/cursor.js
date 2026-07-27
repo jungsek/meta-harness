@@ -44,12 +44,13 @@ export default {
       })
     }
 
-    if (model.mcp)
+    const servers = model.mcp ? resolveServers(model.mcp, 'cursor') : {}
+    if (Object.keys(servers).length)
       out.push({
         category: 'connections',
         sharedFile: '.cursor/mcp.json',
         format: 'json',
-        data: { mcpServers: envRefs(resolveServers(model.mcp, 'cursor')) },
+        data: { mcpServers: envRefs(servers) },
       })
 
     if (model.hooks) {

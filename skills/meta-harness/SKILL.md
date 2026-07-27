@@ -1,6 +1,16 @@
 ---
 name: meta-harness
-description: Build, change, and audit a project's coding-agent harness — the rules, subagents, slash commands, MCP servers, hooks, and permissions that configure Claude Code, Codex CLI, Cursor, OpenCode, Hermes, and .agents — from one source directory that compiles to all of them. Use this skill whenever someone wants to set up or change how agents behave in a repo: "build my harness", adding or editing rules/subagents/commands/hooks/MCP servers, making agents stop before risky operations, keeping .claude and .codex in sync, reviewing whether their agent config is any good, or fixing config drift — even if they never say "meta-harness" and even if they only name one tool ("add a Claude subagent", "set up Codex for this repo").
+description: >-
+  Build, change, and audit a project's coding-agent harness — the rules,
+  subagents, slash commands, MCP servers, hooks, and permissions that configure
+  Claude Code, Codex CLI, Cursor, OpenCode, Hermes, and .agents — from one
+  source directory that compiles to all of them. Use this skill whenever
+  someone wants to set up or change how agents behave in a repo — "build my
+  harness", adding or editing rules/subagents/commands/hooks/MCP servers,
+  making agents stop before risky operations, keeping .claude and .codex in
+  sync, reviewing whether their agent config is any good, or fixing config
+  drift — even if they never say "meta-harness" and even if they only name one
+  tool ("add a Claude subagent", "set up Codex for this repo").
 ---
 
 # meta-harness

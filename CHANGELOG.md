@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.13.0 — 2026-07-27
+
+Findings from a full end-to-end pass over the published package: fresh
+install, adoption, 0.10-tree migration, and live rules-pickup verification
+inside both Claude Code and Codex sessions (both runtimes quoted a sentinel
+rule back — the AGENTS.md block and the CLAUDE.md stub import are confirmed
+working in production, not just in tests).
+
+- **Fixes `init`'s skill install, broken for every adopter.** `SKILL.md`'s
+  unquoted frontmatter description contained `repo: "build my harness"` —
+  invalid YAML, so `npx skills add` rejected the skill and every `init`
+  printed a warning. Description is now a block scalar, and a test parses the
+  frontmatter so this class of break can't ship again.
+- **Empty MCP config compiles to nothing.** The scaffold's commented-out
+  `mcp.jsonc` used to emit a pointless `.mcp.json` `{}`, an empty
+  `[mcp_servers]` table, and their cursor/opencode equivalents. No servers →
+  no connection outputs; existing empty files prune on the next generate.
+- **The scaffold example rule is now a real rule.** Its old body was
+  scaffold meta-chatter ("Delete this file after reading…") which, post-0.11,
+  landed inside AGENTS.md where every runtime read it as an actual
+  instruction. Guidance moved to frontmatter comments.
+- **Codex trust warnings fire once, not every run** — on first write of
+  `.codex/rules/` or `.codex/hooks.json` rather than on every generate, and
+  hooks now get their own warning (entries silently don't fire until trusted).
+
 ## 0.12.0 — 2026-07-27
 
 - **`meta-harness explain <target>`** — per-target manual alongside the

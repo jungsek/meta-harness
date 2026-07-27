@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { stringify as stringifyToml } from 'smol-toml'
 import { resolveEvents, resolveServers, wants } from '../model.js'
@@ -64,22 +65,33 @@ export default {
       })
     }
 
-    if (model.mcp)
+    const servers = model.mcp ? toCodexServers(resolveServers(model.mcp, 'codex'), ctx.warnings) : {}
+    if (Object.keys(servers).length)
       out.push({
         category: 'connections',
         sharedFile: '.codex/config.toml',
         format: 'toml',
-        data: { mcp_servers: toCodexServers(resolveServers(model.mcp, 'codex'), ctx.warnings) },
+        data: { mcp_servers: servers },
       })
+
+    // Trust caveats are real but nagging them on every no-op generate dulls
+    // them — warn only when the file is first created (or changed hooks need
+    // re-trusting, which a changed file also implies via the drift flow).
+    const firstWrite = (rel) => !fs.existsSync(path.join(ctx.root, rel))
 
     if (model.hooks) {
       const events = resolveEvents(model.hooks, 'codex', EVENTS, ctx.warnings)
-      if (Object.keys(events).length)
+      if (Object.keys(events).length) {
         out.push({
           category: 'hooks',
           path: '.codex/hooks.json',
           content: JSON.stringify({ hooks: events }, null, 2) + '\n',
         })
+        if (firstWrite('.codex/hooks.json'))
+          ctx.warnings.push(
+            'codex: hooks.json entries silently do not fire until trusted — run `codex` here, open /hooks, and accept them'
+          )
+      }
     }
 
     if (model.env)
@@ -104,9 +116,10 @@ export default {
         // Verified against codex 0.145: project exec policies load only in a
         // trusted directory. Untrusted, forbidden commands still run — so this
         // is a silent no-op, which for a permission is worth stating loudly.
-        ctx.warnings.push(
-          'codex: .codex/rules/ exec policy only takes effect in a trusted directory — run `codex` once here and accept the trust prompt, or your deny rules will not be enforced'
-        )
+        if (firstWrite('.codex/rules/meta-harness.rules'))
+          ctx.warnings.push(
+            'codex: .codex/rules/ exec policy only takes effect in a trusted directory — run `codex` once here and accept the trust prompt, or your deny rules will not be enforced'
+          )
       }
     }
 

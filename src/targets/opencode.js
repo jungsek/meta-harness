@@ -109,8 +109,9 @@ export default {
       })
     }
 
-    if (model.mcp) {
-      const { mcp, tools } = toOpencode(resolveServers(model.mcp, 'opencode'))
+    const servers = model.mcp ? resolveServers(model.mcp, 'opencode') : {}
+    if (Object.keys(servers).length) {
+      const { mcp, tools } = toOpencode(servers)
       const data = { mcp }
       if (Object.keys(tools).length) data.tools = tools
       out.push({ category: 'connections', sharedFile: 'opencode.json', format: 'json', data })
