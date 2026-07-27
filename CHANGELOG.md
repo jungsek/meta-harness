@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.0 — 2026-07-28
+
+- **New skill reference: `references/agents-md.md`** — how to write and
+  maintain AGENTS.md/CLAUDE.md prose and `rules/` files. Distilled from
+  vendor guidance (Anthropic, Codex, agents.md spec) and measured practice
+  (GitHub's 2,500-repo study, ETH Zurich's context-file evaluation): the
+  would-removing-this-cause-a-mistake test, 30–50 lines to start and
+  under-200 sweet spot, failure-driven rules over anticipatory ones,
+  prose-persuades-permissions-enforce division of labor, root-as-router
+  monorepo nesting, and the add-on-second-mistake / prune-what's-followed
+  maintenance loop. The skill points to it wherever prose or rules get
+  written.
+
 ## 0.16.1 — 2026-07-28
 
 - **An untouched `HARNESS-INIT.md` no longer builds a phantom harness.** The
