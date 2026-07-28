@@ -98,6 +98,21 @@ execution (turn tasks into verifiable goals, loop until checked). It works
 because each rule is written against a failure every practitioner has
 watched happen — not aspiration.
 
+When the user wants this layer, plug the upstream file in verbatim — never
+paraphrase it, so it stays diffable against its source:
+
+```bash
+{ echo '<!-- source: https://raw.githubusercontent.com/multica-ai/andrej-karpathy-skills/main/CLAUDE.md'
+  echo "     fetched: $(date +%F) — verbatim; refresh by re-running this fetch and diffing -->"
+  curl -fsSL https://raw.githubusercontent.com/multica-ai/andrej-karpathy-skills/main/CLAUDE.md
+} > rules/behavioral-guidelines.md
+```
+
+Then `generate` — the block reaches every target through AGENTS.md. The
+HTML provenance comment is stripped before Claude injection and harmless
+elsewhere. To update, re-fetch and read the diff before regenerating; to
+localize a rule, fork it below the comment and note the divergence.
+
 Two conditions keep it honest: state observable success criteria for the
 layer itself ("working if: fewer rewrites from overcomplication, clarifying
 questions come before implementation, diffs shrink"), and re-prune it as
@@ -121,7 +136,10 @@ Treat the file like code: versioned, PR-reviewed, behavior-tested.
   being violated, the file is probably too long, not too weak.
 - `/init`-style generated starters are drafts to cut down, never to ship.
   Claude's `/doctor` flags bloat mechanically — content derivable from the
-  codebase — so pruning needn't be by hand.
+  codebase — so pruning needn't be by hand. Caveat: whether `/doctor`
+  follows the `@AGENTS.md` import from a stub CLAUDE.md is undocumented; a
+  symlinked CLAUDE.md sidesteps the question, otherwise verify on your
+  setup before trusting a "healthy" report.
 - Re-audit against model progress: rules written to steer an older, weaker
   model become pure overhead on a newer one. The teams getting the best
   results are deleting instructions, not adding them.

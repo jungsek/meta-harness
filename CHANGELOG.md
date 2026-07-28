@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.17.2 — 2026-07-28
+
+- **Behavioral layer is now plug-in, not paraphrase.** `references/
+  agents-md.md` ships the tested one-command fetch that pulls the upstream
+  Karpathy-guidelines CLAUDE.md verbatim into `rules/behavioral-guidelines.md`
+  with a provenance comment (source URL + fetch date), so the layer stays
+  diffable against its source; refresh = re-fetch + diff, localize = fork
+  below the comment. Also documents the `/doctor` import caveat: whether it
+  follows `@AGENTS.md` from a stub CLAUDE.md is undocumented — symlink
+  sidesteps it, otherwise verify before trusting a "healthy" report.
+
 ## 0.17.1 — 2026-07-28
 
 - **`references/agents-md.md` gains three practitioner findings**: judgment
