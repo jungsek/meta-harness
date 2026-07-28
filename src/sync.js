@@ -808,21 +808,6 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   const clean = []
   const toFold = []
   const items = scan(ctx)
-
-  // A managed output that is simply gone gets recreated by the generate at
-  // the end of sync. That restores rather than destroys, so it is not a
-  // §7.3 path and it is not folded back as a deletion — but it must not be
-  // silent either: without this the plan shows a bare "→ generate" row for a
-  // file the user deliberately deleted.
-  const scannedFiles = new Set(items.map((i) => i.file))
-  for (const [rel, entry] of Object.entries(ctx.manifest.files)) {
-    if (scannedFiles.has(rel) || entry.symlink) continue
-    if (fs.existsSync(path.join(root, rel)) || isLink(path.join(root, rel))) continue
-    ctx.warnings.push(
-      `${rel}: deleted natively — sync recreates it from the source. Whole-file deletions are not folded back; remove the entries from ${cfg.sourceDir}/ to make it stick.`
-    )
-  }
-
   for (const it of items) {
     let kind = classify(it)
     // A generated AGENTS.md/CLAUDE.md is a compilation of every rules/ file;
@@ -878,6 +863,34 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   const folded = foldAll(ctx, toFold)
   for (const c of folded.conflicts) conflicts.push({ ...c, prefer })
   const preview = previewGenerates(ctx, folded.writes)
+
+  // A managed output that is simply gone gets recreated by the generate at
+  // the end of sync. That restores rather than destroys, so it is not a
+  // §7.3 path and is not folded back as a deletion — but it must not be
+  // silent either, or the plan shows a bare "→ generate" row for a file the
+  // user deliberately deleted. Only say it when the folded source really
+  // still emits the file: if the user removed the source entries too, this
+  // run prunes it, and claiming a recreation would send them to restore
+  // source they meant to delete.
+  const scannedFiles = new Set(items.map((i) => i.file))
+  const stillEmitted = new Set(preview.files.map((f) => f.path))
+  for (const [rel, entry] of Object.entries(ctx.manifest.files)) {
+    if (entry.symlink) continue
+    const here = fs.existsSync(path.join(root, rel)) || isLink(path.join(root, rel))
+    // scannedFiles: a missing command/agent file is already an item (and a
+    // conflict), so it must not also be reported here.
+    if (!here && stillEmitted.has(rel) && !scannedFiles.has(rel))
+      ctx.warnings.push(
+        `${rel}: deleted natively — sync recreates it from the source. Whole-file deletions are not folded back; remove the entries from ${cfg.sourceDir}/ to make it stick.`
+      )
+    // The mirror case, and the one that actually removes something: the file
+    // is still on disk but the source stopped producing it, so the generate
+    // at the end of sync deletes it. `generate` alone does this too, but here
+    // it happens inside a plan, and a plan that shows no row for a deletion
+    // is a plan that lies. (Partial runs never prune — engine.js.)
+    else if (here && !stillEmitted.has(rel) && !targets)
+      ctx.warnings.push(`${rel}: no longer produced by ${cfg.sourceDir}/ — sync removes it`)
+  }
   const unsupported = [
     ...inventory(ctx),
     ...ctx.unsupported,
@@ -934,19 +947,28 @@ function repairSkillMirror(root) {
 // half-built source dir that the next run would treat as a real reconcile
 // base. Rename within a directory is atomic; the pre-images make the commit
 // loop reversible if one of them fails.
-// Staging files a previous run left behind. They are writes that were never
-// committed, so clearing them loses nothing — but they are also the only
-// trace that a run died mid-commit, which can leave the source partly
-// folded. Saying so matters more than the cleanup: the next sync re-derives
-// the fold from native config, so rerunning is the recovery.
+// Staging files a previous run may have left behind.
+//
+// Sync REPORTS these and never deletes them. A suffix is not proof of
+// authorship: `rules/user.mh-sync-tmp` is someone's file, and deleting it
+// because of its name would be exactly the kind of unasked-for destruction
+// this module exists to prevent. Nor is deletion needed — the source loader
+// reads only exact known paths (`connections/mcp.jsonc`, …) and `listMd`
+// takes `.md` alone, so residue is invisible to loadModel/discover and
+// cannot poison a later run. Warn, leave it, move on: that is strictly
+// smaller than a transaction marker AND has no data-loss path.
 //
 // ponytail: per-file rename is atomic, the sequence of renames is not — a
-// SIGKILL between two of them commits a prefix. Closing that needs a
-// transaction marker or a whole-tree pointer swap; not worth it while the
-// recovery is "run sync again". Upgrade path if it ever is: write a
-// <sourceDir>/.sync-journal listing the intended set, and finish or unwind
-// it here on startup.
+// SIGKILL between two of them commits a prefix. Recovery is running sync
+// again, which re-derives the whole fold from native config. Upgrade path if
+// that ever stops being enough: write a <sourceDir>/.sync-journal listing the
+// intended set before staging, and finish or unwind exactly those paths here
+// — the journal, not the suffix, is what makes a file safe to remove.
 const STAGING_SUFFIX = '.mh-sync-tmp'
+
+// Unique per run, so staging can never land on (and then rename away) a file
+// a user happens to have parked at the plain staging path.
+const stagingPath = (abs) => `${abs}.${process.pid}${STAGING_SUFFIX}`
 
 function staleStaging(root, cfg) {
   const dir = path.join(root, cfg.sourceDir)
@@ -957,7 +979,7 @@ function staleStaging(root, cfg) {
 }
 
 const STALE_STAGING_NOTE = (paths) =>
-  `${paths.length} leftover staging file${paths.length > 1 ? 's' : ''} from a sync that was killed mid-write (${paths.join(', ')}) — the source dir may be only partly folded; this run re-derives it from your native config`
+  `${paths.join(', ')} — looks like staging left by an interrupted sync (or a file of yours with that suffix). Left alone: sync never deletes what it cannot prove it wrote. If a sync was killed, the source may be only partly folded; this run re-derives it from your native config, after which the file is safe to remove by hand.`
 
 function commitWrites(root, writes) {
   const staged = []
@@ -972,7 +994,7 @@ function commitWrites(root, writes) {
         staged.push({ abs, tmp: null, prev })
         continue
       }
-      const tmp = `${abs}${STAGING_SUFFIX}`
+      const tmp = stagingPath(abs)
       writeFileEnsured(tmp, w.content)
       staged.push({ abs, tmp, prev })
     }
@@ -1027,11 +1049,6 @@ export function syncApply(root, { targets = null, prefer = null, dryRun = false 
   if (dryRun) return { plan, written: plan.generates.map((g) => g.path), pruned: [], warnings }
 
   const cfg = loadConfig(root)
-  // Clear a killed run's uncommitted staging before writing our own; the
-  // plan already warned that the source may be partly folded, and this run
-  // re-derives it either way.
-  for (const rel of staleStaging(root, cfg)) fs.rmSync(path.join(root, rel), { force: true })
-
   // The fold makes the source truthful about every native item sync looked
   // at, so force-generating those outputs restores them byte-for-byte (or
   // applies the resolution the user asked for). Nothing else may be in the

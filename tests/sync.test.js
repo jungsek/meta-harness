@@ -509,17 +509,51 @@ test('recreating a natively deleted file is reported, not silent', () => {
   assert.ok(exists(root, '.claude/settings.json'), 'behaviour unchanged: it is recreated')
 })
 
-test('staging left by a killed run is reported and cleared', () => {
+test('staging residue is reported and left alone — a suffix is not proof sync wrote it', () => {
   const root = managed()
+  // a file that merely has the suffix, and one at the exact path a staged
+  // write would use: neither may be touched
+  write(root, '.meta-harness/rules/user.mh-sync-tmp', 'do not delete\n')
   write(root, '.meta-harness/env/env.jsonc.mh-sync-tmp', '{"vars":{"HALF":"written"}}')
   const settings = readJson(root, '.claude/settings.json')
   settings.env.NEW = 'v'
   write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
 
-  assert.ok(syncPlan(root, {}).warnings.some((w) => /killed mid-write/.test(w)))
+  assert.ok(syncPlan(root, {}).warnings.some((w) => /user\.mh-sync-tmp/.test(w)), 'reported')
   syncApply(root, {})
-  assert.ok(!exists(root, '.meta-harness/env/env.jsonc.mh-sync-tmp'), 'residue cleared')
-  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.NEW, 'v', 'and the run still folds')
+  assert.equal(read(root, '.meta-harness/rules/user.mh-sync-tmp'), 'do not delete\n', 'user file survives sync')
+  assert.equal(read(root, '.meta-harness/env/env.jsonc.mh-sync-tmp'), '{"vars":{"HALF":"written"}}', 'so does one at a staging path')
+  // and residue does not poison the run: the fold still lands
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.NEW, 'v')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('no recreation warning when the source no longer emits the file', () => {
+  const root = managed()
+  // the ordinary "I removed this from my source on purpose" workflow
+  fs.rmSync(path.join(root, '.meta-harness/connections/mcp.jsonc'))
+  fs.rmSync(path.join(root, '.mcp.json'))
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(plan.warnings.filter((w) => /\.mcp\.json.*recreates/.test(w)), [], 'no claim of a recreation')
+  assert.ok(!plan.generates.some((g) => g.path === '.mcp.json'))
+
+  syncApply(root, {})
+  assert.ok(!exists(root, '.mcp.json'), 'it stays gone, exactly as the plan implied')
+  assert.ok(!status(root).some((r) => r.path === '.mcp.json'), 'and stops being tracked')
+})
+
+test('a live output the source stopped producing is announced before it is removed', () => {
+  const root = managed()
+  fs.rmSync(path.join(root, '.meta-harness/connections/mcp.jsonc')) // .mcp.json still on disk
+
+  const plan = syncPlan(root, {})
+  assert.ok(
+    plan.warnings.some((w) => /^\.mcp\.json: no longer produced by/.test(w)),
+    'the plan says the file is going away'
+  )
+  syncApply(root, {})
+  assert.ok(!exists(root, '.mcp.json'))
 })
 
 test('repairs the .claude/skills mirror, never the skill itself', () => {
