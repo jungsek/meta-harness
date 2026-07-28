@@ -9,6 +9,7 @@ import { DEFAULT_TARGETS, generate, loadConfig, status, uninstall } from '../src
 import { CATEGORIES, TARGETS, explain, explainTarget } from '../src/explain.js'
 import { loadModel } from '../src/model.js'
 import { show } from '../src/show.js'
+import { syncApply, syncPlan } from '../src/sync.js'
 import { targets as registry } from '../src/targets/index.js'
 
 const root = process.cwd()
@@ -27,12 +28,14 @@ const bold = paint('1')
 
 program
   .name('meta-harness')
-  .description('one source dir → native config for coding-agent harnesses')
+  .description('your agent setup, in every agent — one source dir, kept in sync with native config')
   .version(pkg.version, '-v, --version')
   .addHelpText(
     'after',
     `
 Examples:
+  meta-harness sync                          reconcile native config ↔ source, emit to every target
+  meta-harness sync --dry-run                preview the plan, write nothing
   meta-harness init                          scaffold .meta-harness/ with commented examples
   meta-harness generate                      compile for all enabled targets
   meta-harness generate --check              CI drift gate (exit 1 if stale or hand-edited)
@@ -41,6 +44,164 @@ Examples:
   )
 
 const csv = (v) => v.split(',').map((s) => s.trim()).filter(Boolean)
+
+// Renders the SYNC-PLAN §3 report shape: ← import / → generate / = clean,
+// grouped by target, +/~/-/! legend (new / changed / removed / conflict).
+// Tolerant of plan.generates/clean being either plain strings or
+// {target, ...} objects — the exact shape settles with src/sync.js; see
+// w2.status for the assumption this locks in.
+function groupByTarget(items) {
+  const groups = new Map()
+  for (const item of items) {
+    const target = typeof item === 'string' ? '' : (item.target ?? '')
+    if (!groups.has(target)) groups.set(target, [])
+    groups.get(target).push(item)
+  }
+  return groups
+}
+
+// Conflict values are whatever the source/native item actually is — a
+// string for simple settings, an object for hook entries, MCP server
+// defs, permission blocks. Only strings render as themselves; anything
+// else is JSON.stringify'd so both sides of a conflict are always legible,
+// never "[object Object]".
+function renderConflictValue(label, value, dim) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  const [first, ...rest] = text.split('\n')
+  const lines = [`             ${dim(label)} ${first}`]
+  for (const l of rest) lines.push(`                    ${l}`)
+  return lines
+}
+
+function renderSyncPlan(plan, c) {
+  const { dim, bold, yellow, red, green } = c
+  const lines = [bold('sync plan')]
+
+  if (plan.imports?.length) {
+    lines.push(`  ${dim('←')} import`)
+    for (const [target, items] of groupByTarget(plan.imports)) {
+      items.forEach((item, i) => {
+        const mark = item.kind === 'new' ? green('+') : item.kind === 'removed' ? red('-') : yellow('~')
+        const label = (i === 0 ? target : '').padEnd(8)
+        const detail = item.detail ? ` ${dim(`(${item.detail})`)}` : ''
+        lines.push(`    ${label} ${String(item.category ?? '').padEnd(12)} ${mark} ${item.name}${detail}`)
+      })
+    }
+  }
+
+  if (plan.conflicts?.length) {
+    lines.push(`  ${red('!')} conflicts`)
+    for (const cf of plan.conflicts) {
+      const fatalNote = cf.fatal ? ` ${red('(fatal — no --prefer resolves this)')}` : ''
+      lines.push(`    ${cf.target.padEnd(8)} ${cf.category}/${cf.name}${fatalNote}`)
+      if (cf.sides) {
+        // Two natives disagreeing — there is no source side (§ contract:
+        // `source: null` on these), so show one row per native instead of
+        // the usual source/native pair.
+        for (const side of cf.sides) lines.push(...renderConflictValue(side.target, side.value, dim))
+      } else {
+        lines.push(...renderConflictValue('source', cf.source, dim))
+        lines.push(...renderConflictValue('native', cf.native, dim))
+      }
+    }
+    if (plan.conflicts.some((cf) => !cf.fatal)) lines.push(`    ${dim('resolve with --prefer native|source')}`)
+  }
+
+  if (plan.unsupported?.length) {
+    lines.push(`  ${yellow('?')} unsupported`)
+    for (const u of plan.unsupported) {
+      const mark = u.fatal ? red('!') : dim('·')
+      lines.push(`    ${mark} ${u.target.padEnd(8)} ${u.path}  ${dim(u.reason)}`)
+    }
+  }
+
+  if (plan.generates?.length) {
+    lines.push(`  ${dim('→')} generate`)
+    for (const [target, items] of groupByTarget(plan.generates)) {
+      const paths = items.map((i) => (typeof i === 'string' ? i : (i.path ?? i.name))).join('  ')
+      lines.push(`    ${target.padEnd(8)} ${paths}`)
+    }
+  }
+
+  if (plan.clean?.length) {
+    lines.push(`  = clean`)
+    for (const [target, items] of groupByTarget(plan.clean)) {
+      const names = items.map((i) => (typeof i === 'string' ? i : (i.category ?? i.name))).join(' ')
+      lines.push(`    ${dim(target.padEnd(8))} ${dim(names)}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+// SYNC-PLAN §3: --json mirrors {imported, generated, clean, conflicts,
+// unsupported} — the internal plan uses imports/generates (matching the
+// scan/classify vocabulary), renamed here at the JSON boundary only.
+// sourceWrites/scanned are apply-internal (full file bodies, raw scan list)
+// and never belong in a machine-readable feed — dropped, not renamed.
+function planForJson(plan) {
+  const { imports, generates, clean, conflicts, unsupported, mode, targets, warnings } = plan
+  return { imported: imports, generated: generates, clean, conflicts, unsupported, mode, targets, warnings }
+}
+
+// 'shared' is a file-ownership label (AGENTS.md/CLAUDE.md/.mcp.json), not a
+// target a user recognizes — excluded from the headline's target list.
+function bootstrapBanner(plan, bold) {
+  const found = [...new Set((plan.imports ?? []).map((i) => i.target))].filter((t) => t !== 'shared')
+  console.log(bold(`no source dir — importing from ${found.length ? found.join(', ') : 'detected targets'} and building one`))
+}
+
+program
+  .command('sync')
+  .description('reconcile native agent config ↔ source, emit to every target')
+  .option('--dry-run', 'preview the plan; write nothing')
+  .option('--json', 'machine-readable output — mirrors the plan object')
+  .option('--prefer <side>', 'resolve conflicts: native or source')
+  .option('-t, --targets <names>', 'comma-separated targets (default: config or detected)', csv)
+  .action((opts) => {
+    if (opts.prefer && opts.prefer !== 'native' && opts.prefer !== 'source') {
+      console.error(red(`--prefer must be "native" or "source" (got "${opts.prefer}")`))
+      process.exit(1)
+    }
+    const syncOpts = { targets: opts.targets ?? null, prefer: opts.prefer ?? null }
+    try {
+      if (opts.dryRun) {
+        const plan = syncPlan(root, syncOpts)
+        if (opts.json) console.log(JSON.stringify(planForJson(plan), null, 2))
+        else {
+          if (plan.mode === 'bootstrap') bootstrapBanner(plan, bold)
+          console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
+          for (const w of new Set(plan.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
+        }
+        if (plan.conflicts?.length) process.exit(1)
+      } else {
+        const res = syncApply(root, syncOpts)
+        if (opts.json) console.log(JSON.stringify({ ...res, plan: planForJson(res.plan) }, null, 2))
+        else {
+          if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, bold)
+          console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }))
+          for (const w of new Set(res.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
+          console.log(`${green('✔')} synced — ${(res.written ?? []).length} written · ${(res.pruned ?? []).length} pruned`)
+        }
+      }
+    } catch (e) {
+      if (e.conflicts) {
+        // Fatal items (two natives disagreeing, or an untranslatable native
+        // value) throw with both attached — §7.3 needs the unsupported side
+        // visible too, not just conflicts.
+        if (opts.json)
+          console.log(JSON.stringify({ error: e.message, conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, null, 2))
+        else {
+          console.error(red(e.message))
+          console.log(renderSyncPlan({ conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, { dim, bold, yellow, red, green }))
+        }
+        process.exit(1)
+      }
+      if (opts.json) console.log(JSON.stringify({ error: e.message }))
+      else console.error(red(e.message))
+      process.exit(1)
+    }
+  })
 
 program
   .command('generate')
@@ -116,28 +277,29 @@ program
       console.log(`  ${enabled.has(name) ? green('✔') : ' '} ${name}`)
   })
 
-// The agent-facing skill is installed by `skills`, which owns skills dirs and
-// skills-lock.json — meta-harness delegates rather than writing them itself.
-function installSkill() {
+// The agent-facing skills are installed by `skills`, which owns skills dirs
+// and skills-lock.json — meta-harness delegates rather than writing them
+// itself.
+function installSkill(name) {
   const repo = (pkg.repository?.url ?? '').replace(/^git\+|\.git$/g, '').replace(/^https:\/\/github\.com\//, '')
   if (!repo) return false
-  console.log(dim(`installing the meta-harness skill via: npx skills add ${repo}`))
-  const r = spawnSync('npx', ['-y', 'skills', 'add', repo, '--skill', 'meta-harness', '-y'], {
+  console.log(dim(`installing the ${name} skill via: npx skills add ${repo} --skill ${name}`))
+  const r = spawnSync('npx', ['-y', 'skills', 'add', repo, '--skill', name, '-y'], {
     cwd: root,
     stdio: 'inherit',
   })
   if (r.status !== 0) return false
-  // `skills add` mirrors the skill into .claude/skills/ only when it detects
-  // a Claude agent driving the terminal — from Codex, a plain shell, or CI it
+  // `skills add` mirrors a skill into .claude/skills/ only when it detects a
+  // Claude agent driving the terminal — from Codex, a plain shell, or CI it
   // writes .agents/skills/ alone, which Claude Code does not read. Ensure the
   // mirror ourselves so the skill works in every runtime regardless of where
   // init ran. (Codex reads .agents/skills natively; no mirror needed there.)
-  const skillDir = path.join(root, '.agents/skills/meta-harness')
-  const mirror = path.join(root, '.claude/skills/meta-harness')
+  const skillDir = path.join(root, `.agents/skills/${name}`)
+  const mirror = path.join(root, `.claude/skills/${name}`)
   if (fs.existsSync(skillDir) && !fs.existsSync(mirror)) {
     fs.mkdirSync(path.dirname(mirror), { recursive: true })
     fs.symlinkSync(path.relative(path.dirname(mirror), skillDir), mirror)
-    console.log(dim('linked .claude/skills/meta-harness → .agents/skills/meta-harness (Claude does not read .agents)'))
+    console.log(dim(`linked .claude/skills/${name} → .agents/skills/${name} (Claude does not read .agents)`))
   }
   return r.status === 0
 }
@@ -224,9 +386,12 @@ program
     if (created) console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
     else console.log(`${cfg.sourceDir}/ already initialized`)
 
-    const skilled = opts.skill ? installSkill() : false
+    const skilled = opts.skill ? installSkill('meta-harness') : false
     if (opts.skill && !skilled)
-      console.warn(yellow('warn: could not install the agent skill — run it yourself:\n      npx skills add jungsek/meta-harness'))
+      console.warn(yellow('warn: could not install the meta-harness skill — run it yourself:\n      npx skills add jungsek/meta-harness --skill meta-harness'))
+    const auditSkilled = opts.skill ? installSkill('meta-harness-audit') : false
+    if (opts.skill && !auditSkilled)
+      console.warn(yellow('warn: could not install the meta-harness-audit skill — run it yourself:\n      npx skills add jungsek/meta-harness --skill meta-harness-audit'))
 
     console.log(
       `\n${bold('next — pick a path:')}\n\n` +

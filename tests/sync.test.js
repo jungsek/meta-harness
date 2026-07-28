@@ -1,0 +1,661 @@
+import assert from 'node:assert'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { test } from 'node:test'
+import { parse as parseToml } from 'smol-toml'
+import { generate, status } from '../src/engine.js'
+import { syncApply, syncPlan } from '../src/sync.js'
+
+const write = (root, rel, content) => {
+  fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true })
+  fs.writeFileSync(path.join(root, rel), content)
+}
+const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8')
+const readJson = (root, rel) => JSON.parse(read(root, rel))
+const readToml = (root, rel) => parseToml(read(root, rel))
+const exists = (root, rel) => fs.existsSync(path.join(root, rel))
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mh-sync-t-'))
+const TARGETS = ['claude', 'codex'] // explicit everywhere: detection depends on the host PATH
+
+// A repo someone actually works in: .claude/ by hand, no meta-harness.
+function claudeOnly() {
+  const root = tmp()
+  write(
+    root,
+    '.mcp.json',
+    JSON.stringify({ mcpServers: { linear: { type: 'http', url: 'https://mcp.linear.app/mcp' } } }, null, 2)
+  )
+  write(
+    root,
+    '.claude/settings.json',
+    JSON.stringify(
+      {
+        model: 'opus',
+        env: { FOO: 'bar' },
+        enabledPlugins: { 'caveman@jungsek': true },
+        permissions: { deny: ['Read(.env)'], allow: ['Bash(git status)'] },
+        hooks: { Stop: [{ hooks: [{ type: 'command', command: 'bye.sh' }] }] },
+      },
+      null,
+      2
+    )
+  )
+  write(root, 'AGENTS.md', '# House rules\n\nAlways run the tests before you say done.\n')
+  return root
+}
+
+// A repo already compiled by meta-harness.
+function managed({ extraSource = () => {} } = {}) {
+  const root = tmp()
+  write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ["claude", "codex"] }`)
+  write(root, '.meta-harness/rules/style.md', '---\ndescription: style\n---\nUse 2-space indent.\n')
+  write(
+    root,
+    '.meta-harness/connections/mcp.jsonc',
+    JSON.stringify({ mcpServers: { deepwiki: { type: 'http', url: 'https://mcp.deepwiki.com/mcp' } } }, null, 2)
+  )
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'bar' } }))
+  write(
+    root,
+    '.meta-harness/hooks/hooks.jsonc',
+    JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'fmt.sh' }] }] } })
+  )
+  extraSource(root)
+  generate(root)
+  return root
+}
+
+test('bootstrap: claude-only repo gains a working codex without questions', () => {
+  const root = claudeOnly()
+
+  const before = fs.readdirSync(root).sort()
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.equal(plan.mode, 'bootstrap')
+  assert.deepEqual(fs.readdirSync(root).sort(), before, 'syncPlan never writes')
+  assert.equal(plan.conflicts.length, 0)
+  assert.ok(plan.imports.some((i) => i.category === 'connections' && i.name === 'linear' && i.kind === 'new'))
+  assert.ok(plan.imports.some((i) => i.category === 'rules' && i.name === 'AGENTS.md'))
+  // generates carries the target so the plan report can group by it (§3)
+  // …and .claude/settings.json is absent: the fold round-trips its owned
+  // keys exactly, so sync has nothing to rewrite on the side it imported from
+  assert.deepEqual(plan.generates, [
+    { target: 'codex', path: '.codex/config.toml' },
+    { target: 'codex', path: '.codex/hooks.json' },
+    { target: 'codex', path: '.codex/rules/meta-harness.rules' },
+    { target: 'shared', path: '.mcp.json' },
+    { target: 'shared', path: 'AGENTS.md' },
+    { target: 'shared', path: 'CLAUDE.md' },
+  ])
+
+  const res = syncApply(root, { targets: TARGETS })
+  assert.ok(res.written.includes('.codex/config.toml'))
+
+  // source now exists and is the truth
+  assert.ok(exists(root, 'meta-harness.jsonc'))
+  const mcp = JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc'))
+  assert.deepEqual(mcp.mcpServers.linear, { type: 'http', url: 'https://mcp.linear.app/mcp' })
+  const perms = JSON.parse(read(root, '.meta-harness/permissions/permissions.jsonc'))
+  assert.equal(perms.permission.read['.env'], 'deny')
+  assert.equal(perms.permission.bash['git status'], 'allow')
+  assert.ok(!('permissions' in JSON.parse(read(root, '.meta-harness/settings/claude.settings.jsonc'))), 'permissions never land in settings/')
+  assert.equal(JSON.parse(read(root, '.meta-harness/settings/claude.settings.jsonc')).model, 'opus')
+  assert.deepEqual(JSON.parse(read(root, '.meta-harness/plugins/plugins.jsonc')).enabledPlugins, ['caveman@jungsek'])
+  assert.match(read(root, '.meta-harness/rules/imported.md'), /Always run the tests/)
+
+  // codex is live: MCP + hooks + rules
+  const codex = readToml(root, '.codex/config.toml')
+  assert.equal(codex.mcp_servers.linear.url, 'https://mcp.linear.app/mcp')
+  assert.equal(codex.shell_environment_policy.set.FOO, 'bar')
+  assert.ok(readJson(root, '.codex/hooks.json').hooks.Stop, 'hook reached codex')
+  assert.match(read(root, 'AGENTS.md'), /Always run the tests/)
+  assert.match(read(root, 'CLAUDE.md'), /@AGENTS\.md/)
+
+  // claude's own surface survived the round trip
+  const settings = readJson(root, '.claude/settings.json')
+  assert.equal(settings.model, 'opus')
+  assert.deepEqual(settings.permissions.deny, ['Read(.env)'])
+  assert.ok(settings.hooks.Stop)
+  assert.equal(readJson(root, '.mcp.json').mcpServers.linear.type, 'http')
+
+  // end state invariant: source == manifest == every target
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('reconcile: native MCP add + hook edit fold back and propagate', () => {
+  const root = managed()
+
+  const mcp = readJson(root, '.mcp.json')
+  mcp.mcpServers.linear = { type: 'http', url: 'https://mcp.linear.app/mcp' }
+  write(root, '.mcp.json', JSON.stringify(mcp, null, 2) + '\n')
+  const settings = readJson(root, '.claude/settings.json')
+  settings.hooks.PostToolUse[0].hooks[0].command = 'format-all.sh'
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.equal(plan.mode, 'reconcile')
+  assert.equal(plan.conflicts.length, 0)
+  assert.deepEqual(
+    plan.imports.map((i) => `${i.category}/${i.name}/${i.kind}`).sort(),
+    ['connections/linear/new', 'hooks/PostToolUse/changed']
+  )
+  assert.ok(plan.clean.some((c) => c.category === 'env' && c.name === 'FOO'))
+
+  // --dry-run reports the same file set as a real run, as plain paths
+  const dry = syncApply(root, { dryRun: true })
+  assert.deepEqual(dry.written, plan.generates.map((g) => g.path))
+  assert.ok(!JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.linear, 'dry run wrote nothing')
+
+  syncApply(root, {})
+  const src = JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc'))
+  assert.ok(src.mcpServers.linear, 'native-only server folded into the source')
+  assert.ok(src.mcpServers.deepwiki, 'existing source entries survive the fold')
+  const hooks = JSON.parse(read(root, '.meta-harness/hooks/hooks.jsonc'))
+  assert.equal(hooks.hooks.PostToolUse[0].hooks[0].command, 'format-all.sh')
+
+  // propagated to codex, and the manifest is clean again
+  const codex = readToml(root, '.codex/config.toml')
+  assert.ok(codex.mcp_servers.linear)
+  assert.equal(readJson(root, '.codex/hooks.json').hooks.PostToolUse[0].hooks[0].command, 'format-all.sh')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('a synced repo plans nothing', () => {
+  const root = managed()
+  const plan = syncPlan(root, {})
+  assert.deepEqual({ imports: plan.imports, conflicts: plan.conflicts, generates: plan.generates }, {
+    imports: [],
+    conflicts: [],
+    generates: [],
+  })
+  assert.ok(plan.clean.length > 0)
+})
+
+test('conflict: same item edited in the source and natively', () => {
+  const root = managed()
+  // source side
+  write(
+    root,
+    '.meta-harness/connections/mcp.jsonc',
+    JSON.stringify({
+      mcpServers: {
+        deepwiki: { type: 'http', url: 'https://mcp.deepwiki.com/mcp' },
+        linear: { type: 'http', url: 'https://source.example/mcp' },
+      },
+    })
+  )
+  // native side, same item, different value
+  const mcp = readJson(root, '.mcp.json')
+  mcp.mcpServers.linear = { type: 'http', url: 'https://native.example/mcp' }
+  write(root, '.mcp.json', JSON.stringify(mcp, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.equal(plan.conflicts.length, 1)
+  assert.deepEqual(
+    { ...plan.conflicts[0], detail: undefined, prefer: undefined },
+    {
+      target: 'claude',
+      category: 'connections',
+      name: 'linear',
+      source: { type: 'http', url: 'https://source.example/mcp' },
+      native: { type: 'http', url: 'https://native.example/mcp' },
+      detail: undefined,
+      prefer: undefined,
+    }
+  )
+  assert.throws(() => syncApply(root, {}), (e) => e.conflicts?.length === 1 && /--prefer/.test(e.message))
+  // nothing was written by the refused run
+  assert.equal(readJson(root, '.mcp.json').mcpServers.linear.url, 'https://native.example/mcp')
+
+  syncApply(root, { prefer: 'native' })
+  assert.equal(
+    JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.linear.url,
+    'https://native.example/mcp'
+  )
+  assert.equal(readToml(root, '.codex/config.toml').mcp_servers.linear.url, 'https://native.example/mcp')
+})
+
+test('conflict: --prefer source discards the native edit', () => {
+  const root = managed()
+  const settings = readJson(root, '.claude/settings.json')
+  settings.env.FOO = 'native'
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'source' } }))
+
+  assert.equal(syncPlan(root, {}).conflicts.length, 1)
+  syncApply(root, { prefer: 'source' })
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.FOO, 'source')
+  assert.equal(readJson(root, '.claude/settings.json').env.FOO, 'source')
+  assert.equal(readToml(root, '.codex/config.toml').shell_environment_policy.set.FOO, 'source')
+})
+
+test('unmanaged AGENTS.md imports verbatim, with provenance', () => {
+  const root = tmp()
+  write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ["claude", "codex"] }`)
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'bar' } }))
+  write(root, 'AGENTS.md', '# Hand written\n\nNever push to main.\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.imports.filter((i) => i.category === 'rules'),
+    [{ target: 'shared', category: 'rules', name: 'AGENTS.md', kind: 'new', detail: 'unmanaged' }]
+  )
+
+  syncApply(root, {})
+  const imported = read(root, '.meta-harness/rules/imported.md')
+  assert.match(imported, /imported by meta-harness sync from AGENTS\.md/)
+  assert.match(imported, /# Hand written\n\nNever push to main\./)
+  assert.match(read(root, 'AGENTS.md'), /Never push to main\./)
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('codex config.toml reverse-translates into canonical source shape', () => {
+  const root = tmp()
+  write(
+    root,
+    '.codex/config.toml',
+    [
+      'approval_policy = "on-request"',
+      'model = "gpt-5"',
+      '',
+      '[shell_environment_policy]',
+      'inherit = "all"',
+      '',
+      '[shell_environment_policy.set]',
+      'FOO = "bar"',
+      '',
+      '[mcp_servers.files]',
+      'command = "npx"',
+      'args = ["-y", "server-fs"]',
+      'enabled = false',
+      'enabled_tools = ["read"]',
+      '',
+      '[mcp_servers.files.env_vars]',
+      'KEY = "v"',
+      '',
+    ].join('\n')
+  )
+  write(root, '.codex/agents/planner.toml', `name = "planner"\ndescription = "plans"\ndeveloper_instructions = '''\nYou plan.\n'''\n`)
+
+  syncApply(root, { targets: TARGETS })
+
+  const server = JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.files
+  assert.deepEqual(server, {
+    command: 'npx',
+    args: ['-y', 'server-fs'],
+    disabled: true,
+    enabledTools: ['read'],
+    envVars: { KEY: 'v' },
+  })
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.FOO, 'bar')
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).codex.shell_environment_policy.inherit, 'all')
+  assert.equal(JSON.parse(read(root, '.meta-harness/permissions/permissions.jsonc')).codex.approval_policy, 'on-request')
+  assert.match(read(root, '.meta-harness/settings/codex.config.toml'), /model = "gpt-5"/)
+  const agent = read(root, '.meta-harness/agents/planner.md')
+  assert.match(agent, /description: plans/)
+  assert.match(agent, /You plan\./)
+  // …and the asymmetry heals: claude now has what only codex had
+  assert.equal(readJson(root, '.mcp.json').mcpServers.files.command, 'npx')
+  assert.ok(exists(root, '.claude/agents/planner.md'))
+})
+
+test('cursor config is inventoried, never touched', () => {
+  const root = claudeOnly()
+  write(root, '.cursor/mcp.json', JSON.stringify({ mcpServers: { x: { url: 'https://x' } } }))
+  const before = read(root, '.cursor/mcp.json')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(
+    plan.unsupported.map((u) => ({ target: u.target, path: u.path })),
+    [{ target: 'cursor', path: '.cursor/mcp.json' }]
+  )
+  assert.ok(!plan.imports.some((i) => i.target === 'cursor'))
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.cursor/mcp.json'), before, 'inventory-only target is left byte-identical')
+})
+
+/* ── regressions from the §7.3 review ───────────────────────────────────── */
+
+test('native deletion of a managed item folds back instead of being restored', () => {
+  const root = managed()
+  const settings = readJson(root, '.claude/settings.json')
+  delete settings.env.FOO
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.imports.map((i) => `${i.category}/${i.name}/${i.kind}`),
+    ['env/FOO/removed']
+  )
+
+  syncApply(root, {})
+  assert.deepEqual(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars, {}, 'deletion reached the source')
+  assert.ok(!('FOO' in (readJson(root, '.claude/settings.json').env ?? {})), 'not silently restored')
+  assert.ok(!readToml(root, '.codex/config.toml').shell_environment_policy?.set?.FOO, 'deletion propagated to codex')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('deleted natively + changed in the source is a conflict, not a silent restore', () => {
+  const root = managed()
+  const settings = readJson(root, '.claude/settings.json')
+  delete settings.env.FOO
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'moved-on' } }))
+
+  const plan = syncPlan(root, {})
+  assert.equal(plan.conflicts.length, 1)
+  assert.match(plan.conflicts[0].detail, /deleted natively/)
+  assert.throws(() => syncApply(root, {}), /--prefer/)
+
+  syncApply(root, { prefer: 'native' })
+  assert.deepEqual(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars, {})
+})
+
+test('a natively added hooks block in a managed settings.json is imported', () => {
+  const root = tmp()
+  write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ["claude", "codex"] }`)
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'bar' } }))
+  generate(root)
+  // `hooks` is not an owned key of this settings.json — the file-level hash
+  // says "clean", only per-item ownership catches it
+  const settings = readJson(root, '.claude/settings.json')
+  settings.hooks = { PostToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'fmt.sh' }] }] }
+  settings.statusLine = { type: 'command', command: 'line.sh' }
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.imports.map((i) => `${i.category}/${i.name}/${i.kind}`).sort(),
+    ['hooks/PostToolUse/new', 'settings/statusLine/new']
+  )
+
+  syncApply(root, {})
+  assert.ok(JSON.parse(read(root, '.meta-harness/hooks/hooks.jsonc')).hooks.PostToolUse, 'hook reached the source')
+  assert.ok(readJson(root, '.codex/hooks.json').hooks.PostToolUse, 'and therefore codex')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('an untranslatable codex server is kept for codex, never imported then erased', () => {
+  const root = managed()
+  fs.appendFileSync(path.join(root, '.codex/config.toml'), '\n[mcp_servers."bad.name"]\ncommand = "npx"\nargs = ["-y", "x"]\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.unsupported.map((u) => u.target),
+    ['codex']
+  )
+  assert.match(plan.unsupported[0].reason, /not portable/)
+
+  syncApply(root, {})
+  assert.deepEqual(readToml(root, '.codex/config.toml').mcp_servers['bad.name'], { command: 'npx', args: ['-y', 'x'] })
+  assert.ok(
+    !JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers['bad.name'],
+    'stays out of the canonical map — claude cannot have it either'
+  )
+  assert.match(read(root, '.meta-harness/settings/codex.config.toml'), /bad\.name/)
+  // and the next run has nothing left to do
+  assert.deepEqual(syncPlan(root, {}).imports, [])
+})
+
+test('two targets defining the same item natively is fatal, whatever --prefer says', () => {
+  const root = tmp()
+  write(root, '.mcp.json', JSON.stringify({ mcpServers: { shared: { command: 'claude-native' } } }))
+  write(root, '.codex/config.toml', '[mcp_servers.shared]\ncommand = "codex-native"\n')
+  const before = { mcp: read(root, '.mcp.json'), codex: read(root, '.codex/config.toml') }
+
+  const plan = syncPlan(root, { targets: TARGETS, prefer: 'native' })
+  const fatal = plan.conflicts.find((c) => c.fatal)
+  assert.ok(fatal, 'reported as a conflict')
+  assert.equal(fatal.source, null, 'neither value is labelled as coming from the source')
+  assert.deepEqual(fatal.sides, [
+    { target: 'claude', value: { command: 'claude-native' } },
+    { target: 'codex', value: { command: 'codex-native' } },
+  ])
+
+  for (const prefer of ['native', 'source']) {
+    assert.throws(() => syncApply(root, { targets: TARGETS, prefer }), /unresolvable/)
+    assert.equal(read(root, '.mcp.json'), before.mcp)
+    assert.equal(read(root, '.codex/config.toml'), before.codex)
+  }
+  assert.ok(!exists(root, 'meta-harness.jsonc'), 'nothing was written at all')
+})
+
+test('a fold that dies part-way leaves no half-written source dir', () => {
+  const root = claudeOnly()
+  const before = read(root, '.claude/settings.json')
+  // die on the second commit, i.e. after one source file has already landed
+  const realRename = fs.renameSync.bind(fs)
+  let n = 0
+  fs.renameSync = (a, b) => {
+    if (++n === 2) throw new Error('boom')
+    return realRename(a, b)
+  }
+  try {
+    assert.throws(() => syncApply(root, { targets: TARGETS }), /boom/)
+  } finally {
+    fs.renameSync = realRename
+  }
+
+  assert.ok(!exists(root, 'meta-harness.jsonc'), 'config only lands once the whole fold has committed')
+  assert.deepEqual(
+    fs.existsSync(path.join(root, '.meta-harness')) ? walkAll(root, '.meta-harness') : [],
+    [],
+    'the file that did land was rolled back'
+  )
+  assert.deepEqual(walkAll(root, '.').filter((n) => n.endsWith('.mh-sync-tmp')), [], 'no staging files left behind')
+  assert.equal(read(root, '.claude/settings.json'), before, 'native config untouched')
+})
+
+const walkAll = (root, rel) =>
+  fs
+    .readdirSync(path.join(root, rel), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walkAll(root, path.join(rel, e.name)) : [path.join(rel, e.name)]))
+
+test('a codex agent keeps the name its TOML declares', () => {
+  const root = tmp()
+  write(
+    root,
+    '.codex/agents/file-name.toml',
+    `name = "native-name"\ndescription = "x"\ndeveloper_instructions = '''\nDo work.\n'''\n`
+  )
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(readToml(root, '.codex/agents/file-name.toml').name, 'native-name', 'native name survives the round trip')
+  assert.match(read(root, '.meta-harness/agents/file-name.md'), /codex:\s*\n\s*name: native-name/, 'kept as a codex override')
+  assert.match(read(root, '.meta-harness/agents/file-name.md'), /Do work\./)
+})
+
+test('the round-trip backstop covers file surfaces too, not just config keys', () => {
+  const root = tmp()
+  // frontmatter meta-harness reads but claude does not: importing this makes
+  // the agent codex-only, so claude's own copy would vanish
+  write(root, '.claude/agents/helper.md', '---\ndescription: helps\ntargets: ["codex"]\n---\nHelp.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  const fatal = plan.unsupported.filter((u) => u.fatal)
+  assert.equal(fatal.length, 1)
+  assert.match(fatal[0].path, /\.claude\/agents\/helper\.md/)
+  assert.throws(() => syncApply(root, { targets: TARGETS }), /unresolvable/)
+  assert.equal(read(root, '.claude/agents/helper.md'), '---\ndescription: helps\ntargets: ["codex"]\n---\nHelp.\n')
+})
+
+test('a codex config with enabled = true syncs like any other', () => {
+  const root = tmp()
+  write(root, '.codex/config.toml', '[mcp_servers.good]\ncommand = "x"\nenabled = true\n')
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.unsupported, [], 'a dialect default is not an untranslatable value')
+  assert.deepEqual(plan.conflicts, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(readToml(root, '.codex/config.toml').mcp_servers.good.command, 'x', 'server survives')
+  assert.equal(JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.good.command, 'x')
+})
+
+test('recreating a natively deleted file is reported, not silent', () => {
+  const root = managed()
+  fs.rmSync(path.join(root, '.claude/settings.json'))
+
+  const plan = syncPlan(root, {})
+  assert.ok(
+    plan.warnings.some((w) => /\.claude\/settings\.json: deleted natively/.test(w)),
+    'the plan says the file is being restored'
+  )
+  syncApply(root, {})
+  assert.ok(exists(root, '.claude/settings.json'), 'behaviour unchanged: it is recreated')
+})
+
+test('staging residue is reported and left alone — a suffix is not proof sync wrote it', () => {
+  const root = managed()
+  // a file that merely has the suffix, and one at the exact path a staged
+  // write would use: neither may be touched
+  write(root, '.meta-harness/rules/user.mh-sync-tmp', 'do not delete\n')
+  write(root, '.meta-harness/env/env.jsonc.mh-sync-tmp', '{"vars":{"HALF":"written"}}')
+  const settings = readJson(root, '.claude/settings.json')
+  settings.env.NEW = 'v'
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  assert.ok(syncPlan(root, {}).warnings.some((w) => /user\.mh-sync-tmp/.test(w)), 'reported')
+  syncApply(root, {})
+  assert.equal(read(root, '.meta-harness/rules/user.mh-sync-tmp'), 'do not delete\n', 'user file survives sync')
+  assert.equal(read(root, '.meta-harness/env/env.jsonc.mh-sync-tmp'), '{"vars":{"HALF":"written"}}', 'so does one at a staging path')
+  // and residue does not poison the run: the fold still lands
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.NEW, 'v')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('no recreation warning when the source no longer emits the file', () => {
+  const root = managed()
+  // the ordinary "I removed this from my source on purpose" workflow
+  fs.rmSync(path.join(root, '.meta-harness/connections/mcp.jsonc'))
+  fs.rmSync(path.join(root, '.mcp.json'))
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(plan.warnings.filter((w) => /\.mcp\.json.*recreates/.test(w)), [], 'no claim of a recreation')
+  assert.ok(!plan.generates.some((g) => g.path === '.mcp.json'))
+
+  syncApply(root, {})
+  assert.ok(!exists(root, '.mcp.json'), 'it stays gone, exactly as the plan implied')
+  assert.ok(!status(root).some((r) => r.path === '.mcp.json'), 'and stops being tracked')
+})
+
+test('a live output the source stopped producing is announced before it is removed', () => {
+  const root = managed()
+  fs.rmSync(path.join(root, '.meta-harness/connections/mcp.jsonc')) // .mcp.json still on disk
+
+  const plan = syncPlan(root, {})
+  assert.ok(
+    plan.warnings.some((w) => /^\.mcp\.json: no longer produced by/.test(w)),
+    'the plan says the file is going away'
+  )
+  syncApply(root, {})
+  assert.ok(!exists(root, '.mcp.json'))
+})
+
+/* ── hook shape ─────────────────────────────────────────────────────────── */
+
+// Claude Code rejects a whole settings.json containing a malformed hook
+// entry, so a flat entry imported verbatim costs the user every setting in
+// the file — not one hook.
+const sourceHooks = (root) => JSON.parse(read(root, '.meta-harness/hooks/hooks.jsonc')).hooks
+
+test('a flat native hook entry is imported in canonical nested shape', () => {
+  const root = tmp()
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { SessionStart: [{ type: 'command', command: 'echo hi' }] } }))
+
+  syncApply(root, { targets: TARGETS })
+
+  assert.deepEqual(sourceHooks(root).SessionStart, [{ hooks: [{ type: 'command', command: 'echo hi' }] }])
+  const entry = readJson(root, '.claude/settings.json').hooks.SessionStart[0]
+  assert.ok(Array.isArray(entry.hooks), 'the entry Claude reads has an inner hooks array')
+  assert.deepEqual(entry.hooks, [{ type: 'command', command: 'echo hi' }])
+})
+
+test('a flat entry keeps its matcher at the entry level', () => {
+  const root = tmp()
+  write(
+    root,
+    '.codex/hooks.json',
+    JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Write|Edit', type: 'command', command: 'fmt.sh' }] } })
+  )
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).PostToolUse, [
+    { matcher: 'Write|Edit', hooks: [{ type: 'command', command: 'fmt.sh' }] },
+  ])
+})
+
+test('an already-canonical entry passes through untouched', () => {
+  const root = tmp()
+  const canonical = [{ matcher: 'Write', hooks: [{ type: 'command', command: 'a.sh' }, { type: 'command', command: 'b.sh' }] }]
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { PostToolUse: canonical } }))
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).PostToolUse, canonical, 'no double-wrapping')
+})
+
+test('the claude-side hook import is normalized on the same path', () => {
+  const root = tmp()
+  write(
+    root,
+    '.claude/settings.json',
+    JSON.stringify({ model: 'opus', hooks: { Stop: [{ type: 'command', command: 'bye.sh' }] } }, null, 2)
+  )
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).Stop, [{ hooks: [{ type: 'command', command: 'bye.sh' }] }])
+  assert.ok(Array.isArray(readJson(root, '.claude/settings.json').hooks.Stop[0].hooks))
+  assert.ok(readJson(root, '.codex/hooks.json').hooks.Stop[0].hooks, 'and reaches codex in the same shape')
+})
+
+test('normalizing a flat hook is idempotent', () => {
+  const root = tmp()
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { SessionStart: [{ type: 'command', command: 'echo hi' }] } }))
+  syncApply(root, { targets: TARGETS })
+  const after = read(root, '.meta-harness/hooks/hooks.jsonc')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.imports, [], 'second run has nothing left to import')
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [], 'and the round-trip backstop does not read a shape change as a lost value')
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.meta-harness/hooks/hooks.jsonc'), after, 'no diff')
+})
+
+test('repairs the .claude/skills mirror, never the skill itself', () => {
+  const root = managed()
+  write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')
+  const res = syncApply(root, {})
+  assert.ok(res.written.includes('.claude/skills/meta-harness'))
+  assert.equal(read(root, '.claude/skills/meta-harness/SKILL.md'), '# skill\n')
+  assert.ok(!exists(root, '.meta-harness/skills'), 'skills dirs are never imported')
+})
+
+test('unparseable native settings aborts before anything is written', () => {
+  const root = managed()
+  write(root, '.claude/settings.json', '{ "model": "opus", ')
+  assert.throws(() => syncPlan(root, {}), /\.claude\/settings\.json: cannot parse/)
+  assert.throws(() => syncApply(root, {}), /cannot parse/)
+  assert.equal(read(root, '.claude/settings.json'), '{ "model": "opus", ', 'left exactly as found')
+})
+
+test('refuses to force-generate over config it never scanned', () => {
+  const root = managed({
+    extraSource: (r) => write(r, '.meta-harness/commands/ship.md', '---\ndescription: ship\n---\nShip it.\n'),
+  })
+  // a cursor command the user wrote by hand, on a path generate would claim
+  write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ["claude", "codex", "cursor"] }`)
+  write(root, '.cursor/commands/ship.md', 'my own version\n')
+  const mcp = readJson(root, '.mcp.json')
+  mcp.mcpServers.linear = { type: 'http', url: 'https://mcp.linear.app/mcp' }
+  write(root, '.mcp.json', JSON.stringify(mcp, null, 2) + '\n')
+
+  const src = read(root, '.meta-harness/connections/mcp.jsonc')
+  assert.throws(() => syncApply(root, {}), /cannot import/)
+  assert.equal(read(root, '.cursor/commands/ship.md'), 'my own version\n')
+  assert.equal(read(root, '.meta-harness/connections/mcp.jsonc'), src, 'refused before the fold — repo untouched')
+})

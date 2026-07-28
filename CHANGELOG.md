@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.19.0 — 2026-07-28
+
+- **`meta-harness sync`.** Reconciles native config with the source dir
+  instead of only refusing on drift: bootstrap mode imports a lived-in
+  `.claude/`-only (or any-target) repo into a fresh source dir and generates
+  every other target from it, zero-prompt; reconcile mode three-way
+  classifies each item against the last-synced manifest — native-only edits
+  fold back into source, source-only edits generate forward as before, both
+  sides changed is a conflict (`--prefer native|source` resolves, otherwise
+  exit 1 with both values shown). `--dry-run`/`--json` preview the plan;
+  `generate --check` keeps its unchanged CI-guard contract.
+- **`meta-harness-audit` skill.** The maintenance half of the pair: runs
+  `sync --dry-run --json`, reports drift/asymmetry/conflicts/unsupported in
+  plain terms, and offers apply / selective fold / record-as-deliberate.
+  `init` now installs both skills; the `meta-harness` skill gained one line
+  routing maintenance questions to it.
+- README repositioned around sync as the headline story (a `.claude/`-only
+  repo → `npx @jungsek/meta-harness sync` → working `.codex/`, before the
+  from-scratch flow).
+- Hardening from the live verification round: imported hook entries are
+  normalized to the canonical nested shape (a flat hand-written
+  `.codex/hooks.json` entry no longer produces a settings file Claude
+  rejects wholesale); the audit skill carries an explicit dry-run JSON
+  interpretation table with a hard rule against reporting "in sync" while
+  imports or conflicts are non-empty, plus the concrete sibling-skill
+  reference path (no filesystem hunting); duplicate warning lines deduped
+  in sync output. Review record: five adversarial rounds, twelve defects
+  fixed (including two data-loss paths), all independently re-verified.
+
 ## 0.18.2 — 2026-07-28
 
 - **The no-intent menu names all three paths.** The skill told agents to

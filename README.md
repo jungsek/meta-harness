@@ -1,9 +1,10 @@
 # meta-harness
 
-One-way config compiler for coding-agent harnesses: a single source-of-truth
-directory compiles to native project config for **Claude Code, Codex CLI,
-Cursor, OpenCode, and Hermes Agent**. (Skills in `.agents/skills/` belong to
-`npx skills add` — meta-harness installs its own skill there and otherwise
+**Your agent setup, in every agent.** A single source-of-truth directory
+compiles to native project config for **Claude Code, Codex CLI, Cursor,
+OpenCode, and Hermes Agent** — and `sync` reconciles it against whatever's
+already lived-in, in both directions. (Skills in `.agents/skills/` belong to
+`npx skills add` — meta-harness installs its own skills there and otherwise
 stays out.)
 
 Write your rules, subagents, commands, MCP servers, hooks, and settings once —
@@ -15,16 +16,30 @@ that refuses to clobber hand edits.
 npm install -g @jungsek/meta-harness
 ```
 
+Already have a `.claude/` you've been hand-editing, and no `.codex/` yet?
+
 ```
-meta-harness init               # scaffold source dir + config; targets auto-detected, skill installed
-meta-harness generate           # compile to native config for all enabled targets
-meta-harness generate --check   # CI drift gate (exit 1 if stale or hand-edited)
-meta-harness status             # manifest vs disk: clean / EDITED / MISSING
-meta-harness targets            # list supported targets
-meta-harness show               # what this harness contains (derived from source)
-meta-harness explain <name>     # source file shape per category, or a target's manual
-meta-harness uninstall          # remove every trace: outputs, source, config, installed skill
-meta-harness --help             # all commands + examples
+npx @jungsek/meta-harness sync
+```
+
+No prompts. It imports your native Claude config into a fresh source dir,
+then generates a working `.codex/` (and every other detected target) from it
+— zero-prompt, `--dry-run` previews first. Run it again anytime and it heals
+drift both ways: hand edits fold back into the source, source changes reach
+every target.
+
+```
+meta-harness sync                 # reconcile native config ↔ source, emit to every target
+meta-harness sync --dry-run       # preview the plan, write nothing
+meta-harness init                 # scaffold source dir + config; targets auto-detected, skills installed
+meta-harness generate             # compile to native config for all enabled targets
+meta-harness generate --check     # CI drift gate (exit 1 if stale or hand-edited)
+meta-harness status               # manifest vs disk: clean / EDITED / MISSING
+meta-harness targets              # list supported targets
+meta-harness show                 # what this harness contains (derived from source)
+meta-harness explain <name>       # source file shape per category, or a target's manual
+meta-harness uninstall            # remove every trace: outputs, source, config, installed skills
+meta-harness --help               # all commands + examples
 ```
 
 Your project gains exactly two things: the source dir (`.meta-harness/`) and
@@ -56,6 +71,28 @@ ever *input* — a scratchpad for describing what you want, never compiled and
 never a record of what exists. For that, `meta-harness show` derives the
 current contents from the source files, so it can't go stale the way a
 checked-in summary would.
+
+## Keeping it in sync
+
+`meta-harness sync [--dry-run] [--json] [--prefer native|source] [--targets a,b]`
+runs one of two modes, decided by whether a source dir exists:
+
+- **Bootstrap** (no source dir) — import every detected target's native
+  config into a fresh source dir, then generate to all of them.
+- **Reconcile** (source dir exists) — three-way per item against the last
+  synced manifest: native-only change folds back into the source; source-only
+  change generates forward as usual; both changed on the same item is a
+  **conflict** (exit 1, both sides shown — resolve with `--prefer`); anything
+  unmanaged gets imported so it reaches every target, not just the one it
+  showed up in.
+
+`--dry-run` prints the plan and writes nothing — always read it before a real
+run, `sync` shows it either way. Claude and Codex get full backward
+translation (settings, hooks, MCP, permissions, hand-written `AGENTS.md`
+prose); Cursor/OpenCode/Hermes are inventory-only for now — found and
+reported, not yet folded in. For ongoing maintenance rather than a one-off
+run, the `meta-harness-audit` skill wraps this same command with drift
+diagnosis and a fix-it flow — `init` installs it alongside the main skill.
 
 ## Source layout
 
