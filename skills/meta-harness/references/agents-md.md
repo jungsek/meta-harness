@@ -59,6 +59,15 @@ prose lands inconsistently. Reserve emphasis ("IMPORTANT", "YOU MUST") for
 the few rules that genuinely need it — everywhere is nowhere. Two rules that
 contradict get picked between arbitrarily; hunt contradictions when pruning.
 
+Prefer judgment over absolutes. Anthropic cut over 80% of Claude Code's own
+system prompt with no performance loss, partly because absolute rules collide
+— their "never write comments" fought their "document appropriately", and the
+model burned effort resolving the conflict. "Match the style of the
+surrounding code" outlives any NEVER-list. Reserve hard absolutes for safety
+boundaries, where the permission deny does the real work anyway. Onboard a
+senior engineer, not an intern: tell it the two weird things about the
+codebase and trust it with the rest.
+
 ## Structure and scale
 
 Single project: one flat file, sections like commands / testing / structure
@@ -76,6 +85,25 @@ every session → this file; occasional workflow or domain knowledge → a
 skill or linked doc; must happen mechanically every time → a hook or
 permission, not prose.
 
+## The one exception: a behavioral layer
+
+Generic behavior prose normally never earns a line — with one earned
+exception: a small set of rules targeting *observed LLM failure modes*
+rather than project facts. The widely-copied Karpathy-guidelines CLAUDE.md
+is the reference shape, four short sections: think before coding (state
+assumptions, surface tradeoffs, ask instead of picking silently), simplicity
+first (minimum code, nothing speculative), surgical changes (every changed
+line traces to the request; don't "improve" adjacent code), goal-driven
+execution (turn tasks into verifiable goals, loop until checked). It works
+because each rule is written against a failure every practitioner has
+watched happen — not aspiration.
+
+Two conditions keep it honest: state observable success criteria for the
+layer itself ("working if: fewer rewrites from overcomplication, clarifying
+questions come before implementation, diffs shrink"), and re-prune it as
+models improve — a behavioral rule the model now follows unprompted is
+overhead, the same as any other dead line.
+
 ## Tool bridge
 
 Claude Code reads `CLAUDE.md`, not `AGENTS.md` — meta-harness already
@@ -92,6 +120,11 @@ Treat the file like code: versioned, PR-reviewed, behavior-tested.
   is dead weight — delete it or convert it to a hook. If a present rule is
   being violated, the file is probably too long, not too weak.
 - `/init`-style generated starters are drafts to cut down, never to ship.
+  Claude's `/doctor` flags bloat mechanically — content derivable from the
+  codebase — so pruning needn't be by hand.
+- Re-audit against model progress: rules written to steer an older, weaker
+  model become pure overhead on a newer one. The teams getting the best
+  results are deleting instructions, not adding them.
 - Test an edit by watching whether behavior actually shifts, not by
   rereading the prose.
 
@@ -100,4 +133,6 @@ Treat the file like code: versioned, PR-reviewed, behavior-tested.
 Anthropic best-practices + memory docs (code.claude.com/docs); agents.md
 spec; OpenAI Codex AGENTS.md guide; GitHub blog 2,500-repo AGENTS.md study;
 ETH Zurich "Evaluating AGENTS.md" (2026); HumanLayer "Writing a good
-CLAUDE.md"; Chroma "Context Rot".
+CLAUDE.md"; Chroma "Context Rot"; Karpathy-guidelines CLAUDE.md
+(multica-ai/andrej-karpathy-skills); Anthropic's Claude Code system-prompt
+reduction (~80% cut, no regression).

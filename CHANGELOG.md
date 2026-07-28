@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.1 — 2026-07-28
+
+- **`references/agents-md.md` gains three practitioner findings**: judgment
+  over absolutes (Anthropic's ~80% system-prompt cut with zero regression —
+  absolute rules collide and burn effort; "match surrounding style" outlives
+  a NEVER-list; onboard a senior, not an intern); the one earned exception
+  to no-generic-prose — a small behavioral layer against observed LLM
+  failure modes (Karpathy-guidelines shape: assumptions/simplicity/surgical
+  diffs/verifiable goals) with observable "working if" criteria and
+  model-progress re-pruning; and `/doctor` + delete-don't-add as
+  maintenance mechanics.
+
 ## 0.17.0 — 2026-07-28
 
 - **New skill reference: `references/agents-md.md`** — how to write and
