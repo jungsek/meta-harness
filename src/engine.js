@@ -324,7 +324,12 @@ export function uninstall(root, { force = false, check = false } = {}) {
   const rootAbs = path.resolve(root)
   // .claude/skills/meta-harness is the symlink `npx skills add` creates so
   // Claude sees the .agents skill — dangling once the target goes.
-  for (const rel of [cfg.sourceDir, 'meta-harness.jsonc', '.agents/skills/meta-harness', '.claude/skills/meta-harness']) {
+  const SKILL_NAMES = ['meta-harness', 'mh-sync', 'mh-generate', 'mh-status', 'mh-audit']
+  for (const rel of [
+    cfg.sourceDir,
+    'meta-harness.jsonc',
+    ...SKILL_NAMES.flatMap((s) => [`.agents/skills/${s}`, `.claude/skills/${s}`]),
+  ]) {
     const abs = path.resolve(root, rel)
     // sourceDir comes from user config — "." would delete the repo itself,
     // "../x" would escape it. Only delete strict descendants of root.
@@ -356,13 +361,14 @@ export function uninstall(root, { force = false, check = false } = {}) {
   if (lockRaw !== null) {
     try {
       const lock = JSON.parse(lockRaw)
-      if (lock.skills?.['meta-harness']) {
-        delete lock.skills['meta-harness']
+      const ours = SKILL_NAMES.filter((s) => lock.skills?.[s])
+      if (ours.length) {
+        for (const s of ours) delete lock.skills[s]
         if (!check) {
           if (Object.keys(lock.skills).length) fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n')
           else fs.rmSync(lockPath)
         }
-        result.pruned.push('skills-lock.json (meta-harness entry)')
+        result.pruned.push(`skills-lock.json (${ours.join(', ')})`)
       }
     } catch {
       result.warnings.push('skills-lock.json unparseable — left alone')

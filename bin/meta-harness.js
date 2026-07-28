@@ -182,6 +182,12 @@ program
           console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }))
           for (const w of new Set(res.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
           console.log(`${green('✔')} synced — ${(res.written ?? []).length} written · ${(res.pruned ?? []).length} pruned`)
+          // Cold-start story: a bootstrap sync should leave the agent skills
+          // installed too, same as init. Best-effort — a failed install never
+          // fails the sync.
+          if (res.plan?.mode === 'bootstrap')
+            for (const s of ['meta-harness', 'mh-sync', 'mh-generate', 'mh-status', 'mh-audit'])
+              if (!fs.existsSync(path.join(root, `.agents/skills/${s}`))) installSkill(s)
         }
       }
     } catch (e) {
@@ -386,9 +392,13 @@ program
     if (created) console.log(green(`✔ initialized ${cfg.sourceDir}/ (${created} files)`))
     else console.log(`${cfg.sourceDir}/ already initialized`)
 
-    const skilled = opts.skill ? installSkill('meta-harness') : false
+    // One brain skill + four thin entry-point skills. Skills are the only
+    // project-scoped invocation both runtimes resolve (/name in Claude,
+    // $name in Codex) — commands would be Claude-only.
+    const SKILLS = ['meta-harness', 'mh-sync', 'mh-generate', 'mh-status', 'mh-audit']
+    const skilled = opts.skill ? SKILLS.every((s) => installSkill(s)) : false
     if (opts.skill && !skilled)
-      console.warn(yellow('warn: could not install the meta-harness skill — run it yourself:\n      npx skills add jungsek/meta-harness --skill meta-harness'))
+      console.warn(yellow('warn: could not install the agent skills — run it yourself:\n      npx skills add jungsek/meta-harness'))
 
     console.log(
       `\n${bold('next — pick a path:')}\n\n` +
@@ -399,9 +409,10 @@ program
         `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
         `    ...or sketch it in ${cfg.sourceDir}/HARNESS-INIT.md first and let it build from that\n` +
         `    ...or ask it to interview you if you'd rather be walked through it\n\n` +
-        `  ${bold('invoking the skill')}\n` +
-        `    Claude Code: /meta-harness · Codex: $meta-harness or plain words (no slash —\n` +
-        `    and Codex only sees project skills after you accept its directory-trust prompt)\n`
+        `  ${bold('invoking the skills')}\n` +
+        `    build/change: /meta-harness (Claude) · $meta-harness (Codex)\n` +
+        `    day-to-day:   /mh-sync /mh-generate /mh-status /mh-audit ($-prefixed in Codex)\n` +
+        `    Codex only sees project skills after you accept its directory-trust prompt\n`
     )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))
       console.log(

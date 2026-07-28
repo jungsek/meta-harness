@@ -56,12 +56,14 @@ example), run `meta-harness generate`. No agent involved.
 **By agent** — ask any coding agent *"build my harness"*, with requirements
 inline, or after sketching them in `.meta-harness/HARNESS-INIT.md`, or ask
 to be interviewed. The agent writes the source files; the CLI still owns every write
-to `.claude/`, `.codex/`, and friends. `init` installs the skill that teaches
-it this — via `npx skills add`, which owns skill directories; meta-harness
-never writes them itself. Invocation differs per tool: `/meta-harness` in
-Claude Code, `$meta-harness` (or plain words) in Codex — Codex has no slash
-skills, and only sees project skills after you accept its directory-trust
-prompt.
+to `.claude/`, `.codex/`, and friends. `init` installs five skills — via
+`npx skills add`, which owns skill directories; meta-harness never writes
+them itself. `meta-harness` is the brain (build/change/advise); `mh-sync`,
+`mh-generate`, `mh-status`, `mh-audit` are thin entry points so every CLI
+capability is reachable through the agent without touching the terminal.
+Invocation: `/name` in Claude Code, `$name` in Codex (no slash skills there,
+and Codex only sees project skills after you accept its directory-trust
+prompt).
 
 The split is deliberate: **turning intent into source files is judgment
 (agent); turning source files into native config is a pure function (CLI).**
