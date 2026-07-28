@@ -24,12 +24,19 @@ confirmation step.
    already does the three-way classify (manifest = merge base).
 2. **Interpret the plan in user terms**, not the JSON shape:
    - `imported` — native config that drifted or was added by hand and isn't
-     in the source yet. This is the asymmetry story: something works in one
-     tool, not the others, until it's folded in.
+     in the source yet (this is the asymmetry story: something works in one
+     tool, not the others, until it's folded in), or was deleted natively and
+     will be removed from the source to match.
    - `conflicts` — same item edited on both sides since the last sync. Needs
-     a human call; state both values plainly.
+     a human call; state both values plainly. Some conflicts are unresolvable
+     by choice — two native targets disagree with each other and neither
+     matches the source — those need the user to make the targets agree by
+     hand, `--prefer` cannot pick between them.
    - `unsupported` — found in a target meta-harness can't backward-translate
-     yet (cursor/opencode/hermes). Report it, don't imply it'll be handled.
+     yet (cursor/opencode/hermes, inventory only); or a value that *cannot*
+     be imported without losing it from the target that has it (fatal —
+     sync refuses and leaves it where it is). Report both, don't imply
+     either will be handled automatically.
    - `clean` / `generated` — no action needed / what a sync would (re)write.
 3. **Report**: what drifted, why it matters ("Codex has a hook Claude
    doesn't — one team member added it by hand"), and exactly what fixing it

@@ -46,9 +46,10 @@ Examples:
 const csv = (v) => v.split(',').map((s) => s.trim()).filter(Boolean)
 
 // Renders the SYNC-PLAN §3 report shape: ← import / → generate / = clean,
-// grouped by target, +/~/! legend. Tolerant of plan.generates/clean being
-// either plain strings or {target, ...} objects — the exact shape settles
-// with src/sync.js; see w2.status for the assumption this locks in.
+// grouped by target, +/~/-/! legend (new / changed / removed / conflict).
+// Tolerant of plan.generates/clean being either plain strings or
+// {target, ...} objects — the exact shape settles with src/sync.js; see
+// w2.status for the assumption this locks in.
 function groupByTarget(items) {
   const groups = new Map()
   for (const item of items) {
@@ -80,7 +81,7 @@ function renderSyncPlan(plan, c) {
     lines.push(`  ${dim('←')} import`)
     for (const [target, items] of groupByTarget(plan.imports)) {
       items.forEach((item, i) => {
-        const mark = item.kind === 'new' ? green('+') : yellow('~')
+        const mark = item.kind === 'new' ? green('+') : item.kind === 'removed' ? red('-') : yellow('~')
         const label = (i === 0 ? target : '').padEnd(8)
         const detail = item.detail ? ` ${dim(`(${item.detail})`)}` : ''
         lines.push(`    ${label} ${String(item.category ?? '').padEnd(12)} ${mark} ${item.name}${detail}`)
@@ -91,16 +92,27 @@ function renderSyncPlan(plan, c) {
   if (plan.conflicts?.length) {
     lines.push(`  ${red('!')} conflicts`)
     for (const cf of plan.conflicts) {
-      lines.push(`    ${cf.target.padEnd(8)} ${cf.category}/${cf.name}`)
-      lines.push(...renderConflictValue('source', cf.source, dim))
-      lines.push(...renderConflictValue('native', cf.native, dim))
+      const fatalNote = cf.fatal ? ` ${red('(fatal — no --prefer resolves this)')}` : ''
+      lines.push(`    ${cf.target.padEnd(8)} ${cf.category}/${cf.name}${fatalNote}`)
+      if (cf.sides) {
+        // Two natives disagreeing — there is no source side (§ contract:
+        // `source: null` on these), so show one row per native instead of
+        // the usual source/native pair.
+        for (const side of cf.sides) lines.push(...renderConflictValue(side.target, side.value, dim))
+      } else {
+        lines.push(...renderConflictValue('source', cf.source, dim))
+        lines.push(...renderConflictValue('native', cf.native, dim))
+      }
     }
-    lines.push(`    ${dim('resolve with --prefer native|source')}`)
+    if (plan.conflicts.some((cf) => !cf.fatal)) lines.push(`    ${dim('resolve with --prefer native|source')}`)
   }
 
   if (plan.unsupported?.length) {
     lines.push(`  ${yellow('?')} unsupported`)
-    for (const u of plan.unsupported) lines.push(`    ${u.target.padEnd(8)} ${u.path}  ${dim(u.reason)}`)
+    for (const u of plan.unsupported) {
+      const mark = u.fatal ? red('!') : dim('·')
+      lines.push(`    ${mark} ${u.target.padEnd(8)} ${u.path}  ${dim(u.reason)}`)
+    }
   }
 
   if (plan.generates?.length) {
@@ -132,6 +144,13 @@ function planForJson(plan) {
   return { imported: imports, generated: generates, clean, conflicts, unsupported, mode, targets, warnings }
 }
 
+// 'shared' is a file-ownership label (AGENTS.md/CLAUDE.md/.mcp.json), not a
+// target a user recognizes — excluded from the headline's target list.
+function bootstrapBanner(plan, bold) {
+  const found = [...new Set((plan.imports ?? []).map((i) => i.target))].filter((t) => t !== 'shared')
+  console.log(bold(`no source dir — importing from ${found.length ? found.join(', ') : 'detected targets'} and building one`))
+}
+
 program
   .command('sync')
   .description('reconcile native agent config ↔ source, emit to every target')
@@ -150,10 +169,7 @@ program
         const plan = syncPlan(root, syncOpts)
         if (opts.json) console.log(JSON.stringify(planForJson(plan), null, 2))
         else {
-          if (plan.mode === 'bootstrap') {
-            const found = [...new Set((plan.imports ?? []).map((i) => i.target))]
-            console.log(bold(`no source dir — importing from ${found.length ? found.join(', ') : 'detected targets'} and building one`))
-          }
+          if (plan.mode === 'bootstrap') bootstrapBanner(plan, bold)
           console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
         }
         if (plan.conflicts?.length) process.exit(1)
@@ -161,10 +177,7 @@ program
         const res = syncApply(root, syncOpts)
         if (opts.json) console.log(JSON.stringify({ ...res, plan: planForJson(res.plan) }, null, 2))
         else {
-          if (res.plan?.mode === 'bootstrap') {
-            const found = [...new Set((res.plan.imports ?? []).map((i) => i.target))]
-            console.log(bold(`no source dir — importing from ${found.length ? found.join(', ') : 'detected targets'} and building one`))
-          }
+          if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, bold)
           console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }))
           for (const w of res.warnings ?? []) console.warn(yellow(`warn: ${w}`))
           console.log(`${green('✔')} synced — ${(res.written ?? []).length} written · ${(res.pruned ?? []).length} pruned`)
@@ -172,10 +185,14 @@ program
       }
     } catch (e) {
       if (e.conflicts) {
-        if (opts.json) console.log(JSON.stringify({ error: e.message, conflicts: e.conflicts }, null, 2))
+        // Fatal items (two natives disagreeing, or an untranslatable native
+        // value) throw with both attached — §7.3 needs the unsupported side
+        // visible too, not just conflicts.
+        if (opts.json)
+          console.log(JSON.stringify({ error: e.message, conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, null, 2))
         else {
           console.error(red(e.message))
-          console.log(renderSyncPlan({ conflicts: e.conflicts }, { dim, bold, yellow, red, green }))
+          console.log(renderSyncPlan({ conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, { dim, bold, yellow, red, green }))
         }
         process.exit(1)
       }
