@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.20.0 — 2026-07-28
+
+- **Every CLI capability now has an agent entry point.** Four thin skills —
+  `mh-sync`, `mh-generate`, `mh-status`, `mh-audit` — ship alongside the
+  `meta-harness` brain skill, so the whole surface is reachable through the
+  agent (`/mh-sync` in Claude, `$mh-sync` in Codex) without touching the
+  terminal. Skills, not commands, deliberately: skills are the only
+  project-scoped invocation both runtimes resolve — commands would have
+  been Claude-only. Each stub is ~15 lines routing into the CLI plus the
+  brain skill's references (single brain, 0.19.1 stands). `init` installs
+  all five; a bootstrap `sync` now installs them too (cold-start
+  `npx @jungsek/meta-harness sync` leaves a fully agent-drivable repo);
+  uninstall prunes all five and their lock entries.
+
 ## 0.19.1 — 2026-07-28
 
 - **One skill, not two.** `meta-harness-audit` folded into the main skill as
