@@ -353,8 +353,13 @@ function fromCodexServer(cfg) {
 // Reverse of CLAUDE_TOOL in src/permissions.js.
 const CLAUDE_TOOL_REV = { Bash: 'bash', Edit: 'edit', Read: 'read', Write: 'write', WebFetch: 'webfetch' }
 
-function codexAgentToMd(raw) {
+// The source file name decides the emitted agent name, so a native TOML
+// `name` that says something else would be rewritten on the next generate.
+// Keep it as a codex-only frontmatter override (targets/codex.js applies
+// perTarget.codex last) — the file stays at its own path, the name survives.
+function codexAgentToMd(raw, fileName) {
   const { developer_instructions: body = '', name, ...fm } = parseToml(raw)
+  if (name !== undefined && name !== fileName) fm.codex = { ...(fm.codex ?? {}), name }
   return matter.stringify(`\n${String(body).trim()}\n`, fm)
 }
 
@@ -475,7 +480,7 @@ function foldAll(ctx, items) {
         putText(`commands/${it.name}.md`, it.value, it)
         break
       case 'agents':
-        putText(`agents/${it.name}.md`, it.target === 'codex' ? codexAgentToMd(it.value) : it.value, it)
+        putText(`agents/${it.name}.md`, it.target === 'codex' ? codexAgentToMd(it.value, it.name) : it.value, it)
         break
       case 'rules':
         foldRules(it)
@@ -694,6 +699,39 @@ function retained(a, b) {
   return eq(a, b)
 }
 
+// Values a dialect drops because they are its default. `enabled = true` is
+// codex's, and the canonical shape has no field for it (only `disabled`), so
+// demanding it survive the round trip would make an ordinary codex config
+// unsyncable by any flag — a refusal no user could clear. Normalize first,
+// compare after: it is the meaning that has to survive, not the syntax.
+function normalizeNative(it) {
+  if (it.target === 'codex' && it.category === 'connections' && isObj(it.value) && it.value.enabled === true) {
+    const { enabled, ...rest } = it.value
+    return rest
+  }
+  return it.value
+}
+
+// Whole-file surfaces (commands, agents) round-trip through a formatter, so
+// bytes never match — compare what the file means. A symlinked output points
+// straight back at the source file we just wrote, so it holds by definition.
+const trimStrings = (o) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]))
+
+function fileRetained(it, f) {
+  if (!f) return false
+  if (f.symlinkTo) return true
+  try {
+    if (it.file.endsWith('.toml'))
+      return retained(trimStrings(parseToml(it.value)), trimStrings(parseToml(f.content)))
+    const a = matter(it.value)
+    const b = matter(f.content)
+    return retained(a.data, b.data) && a.content.trim() === b.content.trim()
+  } catch {
+    return false
+  }
+}
+
 // §7.3 backstop. Every item we import gets re-emitted to the target it came
 // from — unless a forward translator cannot carry it, in which case importing
 // it would move the value into the source and then delete it from the only
@@ -701,22 +739,28 @@ function retained(a, b) {
 function lostInTranslation(ctx, items, previewFiles, conflicts) {
   const byPath = new Map(previewFiles.map((f) => [f.path, f]))
   const specs = new Map(Object.values(SURFACES).flat().map((s) => [s.file, s]))
+  const dirCategories = new Set(Object.values(DIR_SURFACES).flat().map((s) => s.category))
   // Already fatal for another reason (two natives disagreeing drops one of
   // them by construction) — one report per problem.
   const known = new Set(conflicts.filter((c) => c.fatal).map((c) => `${c.category}/${c.name}`))
   const out = []
   for (const it of items) {
     const spec = specs.get(it.file)
-    if (!spec || !it.hasNative || it.kind === 'removed' || known.has(`${it.category}/${it.name}`)) continue
+    const isFile = !spec && dirCategories.has(it.category)
+    if ((!spec && !isFile) || !it.hasNative || it.kind === 'removed' || known.has(`${it.category}/${it.name}`)) continue
     const f = byPath.get(it.file)
-    let emitted = {}
-    try {
-      emitted = f ? (f.shared ? f.data : FORMATS[spec.format](f.content, it.file)) : {}
-    } catch {
-      /* preview unparseable — the item is certainly not safely there */
+    if (isFile) {
+      if (fileRetained(it, f)) continue
+    } else {
+      let emitted = {}
+      try {
+        emitted = f ? (f.shared ? f.data : FORMATS[spec.format](f.content, it.file)) : {}
+      } catch {
+        /* preview unparseable — the item is certainly not safely there */
+      }
+      const found = index(spec.split(emitted)).get(`${it.category}/${it.name}`)
+      if (found && retained(normalizeNative(it), found.value)) continue
     }
-    const found = index(spec.split(emitted)).get(`${it.category}/${it.name}`)
-    if (found && retained(it.value, found.value)) continue
     out.push({
       target: it.target,
       path: `${it.file} ${it.category}/${it.name}`,
@@ -756,11 +800,30 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
     ctx.warnings.push(...d.warnings)
   }
 
+  const stale = staleStaging(root, cfg)
+  if (stale.length) ctx.warnings.push(STALE_STAGING_NOTE(stale))
+
   const imports = []
   const conflicts = []
   const clean = []
   const toFold = []
-  for (const it of scan(ctx)) {
+  const items = scan(ctx)
+
+  // A managed output that is simply gone gets recreated by the generate at
+  // the end of sync. That restores rather than destroys, so it is not a
+  // §7.3 path and it is not folded back as a deletion — but it must not be
+  // silent either: without this the plan shows a bare "→ generate" row for a
+  // file the user deliberately deleted.
+  const scannedFiles = new Set(items.map((i) => i.file))
+  for (const [rel, entry] of Object.entries(ctx.manifest.files)) {
+    if (scannedFiles.has(rel) || entry.symlink) continue
+    if (fs.existsSync(path.join(root, rel)) || isLink(path.join(root, rel))) continue
+    ctx.warnings.push(
+      `${rel}: deleted natively — sync recreates it from the source. Whole-file deletions are not folded back; remove the entries from ${cfg.sourceDir}/ to make it stick.`
+    )
+  }
+
+  for (const it of items) {
     let kind = classify(it)
     // A generated AGENTS.md/CLAUDE.md is a compilation of every rules/ file;
     // folding an edited one back would duplicate all of them. Always a
@@ -871,6 +934,31 @@ function repairSkillMirror(root) {
 // half-built source dir that the next run would treat as a real reconcile
 // base. Rename within a directory is atomic; the pre-images make the commit
 // loop reversible if one of them fails.
+// Staging files a previous run left behind. They are writes that were never
+// committed, so clearing them loses nothing — but they are also the only
+// trace that a run died mid-commit, which can leave the source partly
+// folded. Saying so matters more than the cleanup: the next sync re-derives
+// the fold from native config, so rerunning is the recovery.
+//
+// ponytail: per-file rename is atomic, the sequence of renames is not — a
+// SIGKILL between two of them commits a prefix. Closing that needs a
+// transaction marker or a whole-tree pointer swap; not worth it while the
+// recovery is "run sync again". Upgrade path if it ever is: write a
+// <sourceDir>/.sync-journal listing the intended set, and finish or unwind
+// it here on startup.
+const STAGING_SUFFIX = '.mh-sync-tmp'
+
+function staleStaging(root, cfg) {
+  const dir = path.join(root, cfg.sourceDir)
+  if (!fs.existsSync(dir)) return []
+  return walk(dir)
+    .filter((f) => f.endsWith(STAGING_SUFFIX))
+    .map((f) => path.join(cfg.sourceDir, f))
+}
+
+const STALE_STAGING_NOTE = (paths) =>
+  `${paths.length} leftover staging file${paths.length > 1 ? 's' : ''} from a sync that was killed mid-write (${paths.join(', ')}) — the source dir may be only partly folded; this run re-derives it from your native config`
+
 function commitWrites(root, writes) {
   const staged = []
   const clean = () => {
@@ -884,7 +972,7 @@ function commitWrites(root, writes) {
         staged.push({ abs, tmp: null, prev })
         continue
       }
-      const tmp = `${abs}.mh-sync-tmp`
+      const tmp = `${abs}${STAGING_SUFFIX}`
       writeFileEnsured(tmp, w.content)
       staged.push({ abs, tmp, prev })
     }
@@ -939,6 +1027,11 @@ export function syncApply(root, { targets = null, prefer = null, dryRun = false 
   if (dryRun) return { plan, written: plan.generates.map((g) => g.path), pruned: [], warnings }
 
   const cfg = loadConfig(root)
+  // Clear a killed run's uncommitted staging before writing our own; the
+  // plan already warned that the source may be partly folded, and this run
+  // re-derives it either way.
+  for (const rel of staleStaging(root, cfg)) fs.rmSync(path.join(root, rel), { force: true })
+
   // The fold makes the source truthful about every native item sync looked
   // at, so force-generating those outputs restores them byte-for-byte (or
   // applies the resolution the user asked for). Nothing else may be in the

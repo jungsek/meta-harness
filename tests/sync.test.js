@@ -451,6 +451,77 @@ const walkAll = (root, rel) =>
     .readdirSync(path.join(root, rel), { withFileTypes: true })
     .flatMap((e) => (e.isDirectory() ? walkAll(root, path.join(rel, e.name)) : [path.join(rel, e.name)]))
 
+test('a codex agent keeps the name its TOML declares', () => {
+  const root = tmp()
+  write(
+    root,
+    '.codex/agents/file-name.toml',
+    `name = "native-name"\ndescription = "x"\ndeveloper_instructions = '''\nDo work.\n'''\n`
+  )
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(readToml(root, '.codex/agents/file-name.toml').name, 'native-name', 'native name survives the round trip')
+  assert.match(read(root, '.meta-harness/agents/file-name.md'), /codex:\s*\n\s*name: native-name/, 'kept as a codex override')
+  assert.match(read(root, '.meta-harness/agents/file-name.md'), /Do work\./)
+})
+
+test('the round-trip backstop covers file surfaces too, not just config keys', () => {
+  const root = tmp()
+  // frontmatter meta-harness reads but claude does not: importing this makes
+  // the agent codex-only, so claude's own copy would vanish
+  write(root, '.claude/agents/helper.md', '---\ndescription: helps\ntargets: ["codex"]\n---\nHelp.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  const fatal = plan.unsupported.filter((u) => u.fatal)
+  assert.equal(fatal.length, 1)
+  assert.match(fatal[0].path, /\.claude\/agents\/helper\.md/)
+  assert.throws(() => syncApply(root, { targets: TARGETS }), /unresolvable/)
+  assert.equal(read(root, '.claude/agents/helper.md'), '---\ndescription: helps\ntargets: ["codex"]\n---\nHelp.\n')
+})
+
+test('a codex config with enabled = true syncs like any other', () => {
+  const root = tmp()
+  write(root, '.codex/config.toml', '[mcp_servers.good]\ncommand = "x"\nenabled = true\n')
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.unsupported, [], 'a dialect default is not an untranslatable value')
+  assert.deepEqual(plan.conflicts, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(readToml(root, '.codex/config.toml').mcp_servers.good.command, 'x', 'server survives')
+  assert.equal(JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.good.command, 'x')
+})
+
+test('recreating a natively deleted file is reported, not silent', () => {
+  const root = managed()
+  fs.rmSync(path.join(root, '.claude/settings.json'))
+
+  const plan = syncPlan(root, {})
+  assert.ok(
+    plan.warnings.some((w) => /\.claude\/settings\.json: deleted natively/.test(w)),
+    'the plan says the file is being restored'
+  )
+  syncApply(root, {})
+  assert.ok(exists(root, '.claude/settings.json'), 'behaviour unchanged: it is recreated')
+})
+
+test('staging left by a killed run is reported and cleared', () => {
+  const root = managed()
+  write(root, '.meta-harness/env/env.jsonc.mh-sync-tmp', '{"vars":{"HALF":"written"}}')
+  const settings = readJson(root, '.claude/settings.json')
+  settings.env.NEW = 'v'
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  assert.ok(syncPlan(root, {}).warnings.some((w) => /killed mid-write/.test(w)))
+  syncApply(root, {})
+  assert.ok(!exists(root, '.meta-harness/env/env.jsonc.mh-sync-tmp'), 'residue cleared')
+  assert.equal(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars.NEW, 'v', 'and the run still folds')
+})
+
 test('repairs the .claude/skills mirror, never the skill itself', () => {
   const root = managed()
   write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')
