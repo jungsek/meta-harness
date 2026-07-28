@@ -556,6 +556,76 @@ test('a live output the source stopped producing is announced before it is remov
   assert.ok(!exists(root, '.mcp.json'))
 })
 
+/* ── hook shape ─────────────────────────────────────────────────────────── */
+
+// Claude Code rejects a whole settings.json containing a malformed hook
+// entry, so a flat entry imported verbatim costs the user every setting in
+// the file — not one hook.
+const sourceHooks = (root) => JSON.parse(read(root, '.meta-harness/hooks/hooks.jsonc')).hooks
+
+test('a flat native hook entry is imported in canonical nested shape', () => {
+  const root = tmp()
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { SessionStart: [{ type: 'command', command: 'echo hi' }] } }))
+
+  syncApply(root, { targets: TARGETS })
+
+  assert.deepEqual(sourceHooks(root).SessionStart, [{ hooks: [{ type: 'command', command: 'echo hi' }] }])
+  const entry = readJson(root, '.claude/settings.json').hooks.SessionStart[0]
+  assert.ok(Array.isArray(entry.hooks), 'the entry Claude reads has an inner hooks array')
+  assert.deepEqual(entry.hooks, [{ type: 'command', command: 'echo hi' }])
+})
+
+test('a flat entry keeps its matcher at the entry level', () => {
+  const root = tmp()
+  write(
+    root,
+    '.codex/hooks.json',
+    JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Write|Edit', type: 'command', command: 'fmt.sh' }] } })
+  )
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).PostToolUse, [
+    { matcher: 'Write|Edit', hooks: [{ type: 'command', command: 'fmt.sh' }] },
+  ])
+})
+
+test('an already-canonical entry passes through untouched', () => {
+  const root = tmp()
+  const canonical = [{ matcher: 'Write', hooks: [{ type: 'command', command: 'a.sh' }, { type: 'command', command: 'b.sh' }] }]
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { PostToolUse: canonical } }))
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).PostToolUse, canonical, 'no double-wrapping')
+})
+
+test('the claude-side hook import is normalized on the same path', () => {
+  const root = tmp()
+  write(
+    root,
+    '.claude/settings.json',
+    JSON.stringify({ model: 'opus', hooks: { Stop: [{ type: 'command', command: 'bye.sh' }] } }, null, 2)
+  )
+
+  syncApply(root, { targets: TARGETS })
+  assert.deepEqual(sourceHooks(root).Stop, [{ hooks: [{ type: 'command', command: 'bye.sh' }] }])
+  assert.ok(Array.isArray(readJson(root, '.claude/settings.json').hooks.Stop[0].hooks))
+  assert.ok(readJson(root, '.codex/hooks.json').hooks.Stop[0].hooks, 'and reaches codex in the same shape')
+})
+
+test('normalizing a flat hook is idempotent', () => {
+  const root = tmp()
+  write(root, '.codex/hooks.json', JSON.stringify({ hooks: { SessionStart: [{ type: 'command', command: 'echo hi' }] } }))
+  syncApply(root, { targets: TARGETS })
+  const after = read(root, '.meta-harness/hooks/hooks.jsonc')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.imports, [], 'second run has nothing left to import')
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [], 'and the round-trip backstop does not read a shape change as a lost value')
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.meta-harness/hooks/hooks.jsonc'), after, 'no diff')
+})
+
 test('repairs the .claude/skills mirror, never the skill itself', () => {
   const root = managed()
   write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')

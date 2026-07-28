@@ -350,6 +350,24 @@ function fromCodexServer(cfg) {
   return out
 }
 
+// Canonical hook entries are Claude-shaped: [{matcher?, hooks: [{type,
+// command, …}]}]. A hand-written native file may use the flat form instead
+// ([{type, command}]) — targets/cursor.js and opencode flatten to it for
+// exactly that reason, and nothing stops someone writing it by hand.
+//
+// Importing a flat entry verbatim does not cost one hook. Claude Code
+// refuses to load a settings.json containing a malformed entry AT ALL, so
+// the user silently loses env, permissions, statusLine and every other
+// setting in that file. Normalize on the way in, once, on the path both
+// targets' hook imports go through.
+const toCanonicalHookEntry = (e) => {
+  if (!isObj(e) || Array.isArray(e.hooks)) return e // already canonical
+  const { matcher, ...def } = e
+  return { ...(matcher === undefined ? {} : { matcher }), hooks: [def] }
+}
+
+const canonicalHooks = (v) => (Array.isArray(v) ? v.map(toCanonicalHookEntry) : v)
+
 // Reverse of CLAUDE_TOOL in src/permissions.js.
 const CLAUDE_TOOL_REV = { Bash: 'bash', Edit: 'edit', Read: 'read', Write: 'write', WebFetch: 'webfetch' }
 
@@ -450,7 +468,10 @@ function foldAll(ctx, items) {
       }
       case 'hooks': {
         const d = doc('hooks/hooks.jsonc', 'jsonc')
-        if (claim(`hook:${it.name}`, it.value, it)) (d.hooks ??= {})[it.name] = it.value
+        // Normalized before the claim, so the same event written flat in one
+        // target and nested in another dedupes instead of conflicting.
+        const v = canonicalHooks(it.value)
+        if (claim(`hook:${it.name}`, v, it)) (d.hooks ??= {})[it.name] = v
         break
       }
       case 'env': {
@@ -709,6 +730,11 @@ function normalizeNative(it) {
     const { enabled, ...rest } = it.value
     return rest
   }
+  // Same normalization the fold applies: a flat native entry is re-emitted
+  // in canonical form, which is a shape change, not a lost value. Without
+  // this the fix above would turn every flat hook into a refusal no flag
+  // could clear.
+  if (it.category === 'hooks') return canonicalHooks(it.value)
   return it.value
 }
 
