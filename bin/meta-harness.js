@@ -171,7 +171,7 @@ program
         else {
           if (plan.mode === 'bootstrap') bootstrapBanner(plan, bold)
           console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
-          for (const w of plan.warnings ?? []) console.warn(yellow(`warn: ${w}`))
+          for (const w of new Set(plan.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
         }
         if (plan.conflicts?.length) process.exit(1)
       } else {
@@ -180,7 +180,7 @@ program
         else {
           if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, bold)
           console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }))
-          for (const w of res.warnings ?? []) console.warn(yellow(`warn: ${w}`))
+          for (const w of new Set(res.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
           console.log(`${green('✔')} synced — ${(res.written ?? []).length} written · ${(res.pruned ?? []).length} pruned`)
         }
       }
