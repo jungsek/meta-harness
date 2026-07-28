@@ -27,6 +27,10 @@ Three commands answer most questions, so ask the tool rather than guessing:
 (the exact shape of a source file), `meta-harness show` (what this harness
 currently contains).
 
+Maintaining a harness that already exists — drift, "claude and codex are out
+of sync", auditing config health — is the sibling `meta-harness-audit`
+skill's job, not this one's.
+
 ## Building or changing a harness
 
 Users arrive three ways. All converge on the same middle.
