@@ -171,6 +171,7 @@ program
         else {
           if (plan.mode === 'bootstrap') bootstrapBanner(plan, bold)
           console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
+          for (const w of plan.warnings ?? []) console.warn(yellow(`warn: ${w}`))
         }
         if (plan.conflicts?.length) process.exit(1)
       } else {
