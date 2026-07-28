@@ -21,28 +21,25 @@ confirmation step.
 
 1. **`meta-harness sync --dry-run --json`.** This is the whole data feed —
    don't hand-diff `.claude/` against `.meta-harness/` yourself, the CLI
-   already does the three-way classify (manifest = merge base).
-2. **Interpret the plan in user terms**, not the JSON shape:
-   - `imported` — native config that drifted or was added by hand and isn't
-     in the source yet (this is the asymmetry story: something works in one
-     tool, not the others, until it's folded in), or was deleted natively and
-     will be removed from the source to match.
-   - `conflicts` — same item edited on both sides since the last sync. Needs
-     a human call; state both values plainly. Some conflicts are unresolvable
-     by choice — two native targets disagree with each other and neither
-     matches the source — those need the user to make the targets agree by
-     hand, `--prefer` cannot pick between them.
-   - `unsupported` — found in a target meta-harness can't backward-translate
-     yet (cursor/opencode/hermes, inventory only); or a value that *cannot*
-     be imported without losing it from the target that has it (fatal —
-     sync refuses and leaves it where it is). Report both, don't imply
-     either will be handled automatically.
-   - `clean` / `generated` — no action needed / what a sync would (re)write.
-3. **Report**: what drifted, why it matters ("Codex has a hook Claude
+   already does the three-way classify (manifest = merge base). The payload's
+   keys are exactly the §3 output names — no renaming, nothing else to parse:
+
+   | JSON key | meaning | what the report must do |
+   |---|---|---|
+   | `imported` | native config not yet in source — added, changed, or deleted natively | report EACH item |
+   | `conflicts` | same item changed on both sides since the last sync (some `fatal`: two natives disagree, `--prefer` can't pick) | report BOTH sides of each |
+   | `unsupported` | can't be backward-translated (inventory-only target), or `fatal` (would be lost if imported) | flag it — say it will not be handled automatically |
+   | `clean` | already in sync | no action |
+   | `generated` | what applying would (re)write | preview only, not a finding |
+
+   **Hard rule: never report "in sync" or "config in sync" while `imported`
+   or `conflicts` is non-empty.** Either one non-empty means pending drift —
+   say so, item by item, using the table above. Only when BOTH are empty is
+   "in sync" a true statement; an all-empty dry-run is a valid, good report.
+2. **Report**: what drifted, why it matters ("Codex has a hook Claude
    doesn't — one team member added it by hand"), and exactly what fixing it
-   would change. No invented findings — an empty dry-run is a valid, good
-   report.
-4. **Offer three actions**, let the user pick:
+   would change. No invented findings beyond what the JSON actually says.
+3. **Offer three actions**, let the user pick:
    - **Apply** — run `meta-harness sync` (no `--dry-run`) to fold everything
      the plan showed. For conflicts, this needs `--prefer native|source`.
    - **Selective** — user names which items to fold; edit the named source
@@ -52,10 +49,15 @@ confirmation step.
      target-only debug hook). Note it in a `rules/` file or a comment near the
      relevant source entry so the next audit doesn't re-flag it as an
      oversight.
-5. **Quality pass.** Once config is in sync, check it against the sibling
-   skill's checklists — `../meta-harness/references/review.md` (coverage +
-   smells) and `../meta-harness/references/agents-md.md` (prose discipline
-   for anything the sync folded into `rules/`). Report only genuine gaps.
+4. **Quality pass.** Once config is in sync, check it against the sibling
+   skill's checklists, at `../meta-harness/references/review.md` (coverage +
+   smells) and `../meta-harness/references/agents-md.md` (prose discipline for
+   anything the sync folded into `rules/`) — paths relative to *this* file's
+   own directory. Both skills ship in one package, so the sibling is always
+   there; read it directly at that path. **Do not search the filesystem for
+   it** — no `find`, no glob, no home-directory scan. If it's genuinely not
+   at that path, say so and continue the audit without it. Report only
+   genuine gaps.
 
 ## Notes
 
