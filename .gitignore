@@ -2,3 +2,4 @@ node_modules/
 meta-harness.local.jsonc
 .e2e/
 skills/meta-harness-workspace/
+.team/
