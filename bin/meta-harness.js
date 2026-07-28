@@ -109,6 +109,16 @@ function renderSyncPlan(plan, c) {
   return lines.join('\n')
 }
 
+// SYNC-PLAN §3: --json mirrors {imported, generated, clean, conflicts,
+// unsupported} — the internal plan uses imports/generates (matching the
+// scan/classify vocabulary), renamed here at the JSON boundary only.
+// sourceWrites/scanned are apply-internal (full file bodies, raw scan list)
+// and never belong in a machine-readable feed — dropped, not renamed.
+function planForJson(plan) {
+  const { imports, generates, clean, conflicts, unsupported, mode, targets, warnings } = plan
+  return { imported: imports, generated: generates, clean, conflicts, unsupported, mode, targets, warnings }
+}
+
 program
   .command('sync')
   .description('reconcile native agent config ↔ source, emit to every target')
@@ -125,7 +135,7 @@ program
     try {
       if (opts.dryRun) {
         const plan = syncPlan(root, syncOpts)
-        if (opts.json) console.log(JSON.stringify(plan, null, 2))
+        if (opts.json) console.log(JSON.stringify(planForJson(plan), null, 2))
         else {
           if (plan.mode === 'bootstrap') {
             const found = [...new Set((plan.imports ?? []).map((i) => i.target))]
@@ -136,7 +146,7 @@ program
         if (plan.conflicts?.length) process.exit(1)
       } else {
         const res = syncApply(root, syncOpts)
-        if (opts.json) console.log(JSON.stringify(res, null, 2))
+        if (opts.json) console.log(JSON.stringify({ ...res, plan: planForJson(res.plan) }, null, 2))
         else {
           if (res.plan?.mode === 'bootstrap') {
             const found = [...new Set((res.plan.imports ?? []).map((i) => i.target))]
