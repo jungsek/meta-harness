@@ -59,6 +59,19 @@ function groupByTarget(items) {
   return groups
 }
 
+// Conflict values are whatever the source/native item actually is — a
+// string for simple settings, an object for hook entries, MCP server
+// defs, permission blocks. Only strings render as themselves; anything
+// else is JSON.stringify'd so both sides of a conflict are always legible,
+// never "[object Object]".
+function renderConflictValue(label, value, dim) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  const [first, ...rest] = text.split('\n')
+  const lines = [`             ${dim(label)} ${first}`]
+  for (const l of rest) lines.push(`                    ${l}`)
+  return lines
+}
+
 function renderSyncPlan(plan, c) {
   const { dim, bold, yellow, red, green } = c
   const lines = [bold('sync plan')]
@@ -79,8 +92,8 @@ function renderSyncPlan(plan, c) {
     lines.push(`  ${red('!')} conflicts`)
     for (const cf of plan.conflicts) {
       lines.push(`    ${cf.target.padEnd(8)} ${cf.category}/${cf.name}`)
-      lines.push(`             ${dim('source')} ${cf.source}`)
-      lines.push(`             ${dim('native')} ${cf.native}`)
+      lines.push(...renderConflictValue('source', cf.source, dim))
+      lines.push(...renderConflictValue('native', cf.native, dim))
     }
     lines.push(`    ${dim('resolve with --prefer native|source')}`)
   }
