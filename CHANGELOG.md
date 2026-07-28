@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.0 — 2026-07-28
+
+- **BREAKING: AGENTS.md and CLAUDE.md are now whole-file outputs.** The
+  co-owned marker block — one managed region spliced into a hand-written
+  file, with splice/extract/stray-marker-repair/partial-hash machinery
+  behind it — is gone. Both files are compiled entirely from `rules/`, the
+  same contract as every other output; project prose is just another rules
+  file (`root: true` leads the file). Drift is a plain file hash. The
+  "CLAUDE.md already imports AGENTS.md → left alone" special case is gone
+  too: the stub is always emitted (a pre-existing hand file gets the normal
+  unmanaged refusal, `--force` adopts).
+  **Migration:** a file still carrying the old
+  `<!-- meta-harness:start/end -->` markers makes generate refuse with
+  instructions — move any prose you wrote outside the block into a
+  `rules/` file, then rerun with `--force`. Uninstall still prunes
+  legacy-manifest marker files the old way (block removed, prose kept).
+
 ## 0.17.2 — 2026-07-28
 
 - **Behavioral layer is now plug-in, not paraphrase.** `references/

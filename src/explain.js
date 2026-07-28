@@ -6,13 +6,13 @@ export const CATEGORIES = {
     where: '<sourceDir>/rules/*.md',
     what: 'Policy and identity prose the agents must follow.',
     frontmatter:
-      'description (string), targets (array, default ["*"] — decides inclusion only; AGENTS.md is shared), root (bool — leads the AGENTS.md block; use it for identity). paths:/globs: rejected — rules load unconditionally.',
+      'description (string), targets (array, default ["*"] — decides inclusion only; AGENTS.md is shared), root (bool — leads the generated AGENTS.md; use it for identity). paths:/globs: rejected — rules load unconditionally.',
     example: `---
 description: Safety floor — protected domains and secrets
 ---
 # Safety
 Stop for human review: migrations, auth, payments, API contracts, CI config.`,
-    goes: 'one managed block in AGENTS.md — read natively by codex, cursor, opencode, hermes; Claude reads it through a generated CLAUDE.md @AGENTS.md stub',
+    goes: 'a fully generated AGENTS.md — read natively by codex, cursor, opencode, hermes; Claude reads it through a generated CLAUDE.md @AGENTS.md stub',
   },
   agents: {
     where: '<sourceDir>/agents/*.md',
@@ -113,7 +113,7 @@ export const TARGETS = {
     verified: 'claude-code 2.x (hooks, permissions, env, MCP live)',
     docs: 'https://code.claude.com/docs',
     surfaces: {
-      rules: 'CLAUDE.md stub (managed block) → @AGENTS.md',
+      rules: 'generated CLAUDE.md stub → @AGENTS.md',
       agents: '.claude/agents/*.md',
       commands: '.claude/commands/ (symlink)',
       connections: '.mcp.json',
@@ -136,7 +136,7 @@ export const TARGETS = {
     verified: 'codex-cli 0.145.0',
     docs: 'https://developers.openai.com/codex',
     surfaces: {
-      rules: 'AGENTS.md block (managed)',
+      rules: 'generated AGENTS.md',
       agents: '.codex/agents/*.toml',
       commands: '— global-only, skipped',
       connections: '[mcp_servers] in .codex/config.toml',
@@ -157,7 +157,7 @@ export const TARGETS = {
     verified: null,
     docs: 'https://cursor.com/docs',
     surfaces: {
-      rules: 'AGENTS.md block (managed) — read natively',
+      rules: 'generated AGENTS.md — read natively',
       agents: '.cursor/agents/*.md',
       commands: '.cursor/commands/*.md',
       connections: '.cursor/mcp.json',
@@ -172,7 +172,7 @@ export const TARGETS = {
     verified: null,
     docs: 'https://opencode.ai/docs',
     surfaces: {
-      rules: 'AGENTS.md block (managed) — read natively',
+      rules: 'generated AGENTS.md — read natively',
       agents: '.opencode/agents/*.md',
       commands: '.opencode/commands/*.md',
       connections: 'mcp + tools in opencode.json',
@@ -188,7 +188,7 @@ export const TARGETS = {
     verified: 'hermes-agent 0.18.2 (AGENTS.md rules pickup)',
     docs: null,
     surfaces: {
-      rules: 'AGENTS.md block (managed) — read natively',
+      rules: 'generated AGENTS.md — read natively',
       agents: '.hermes/meta-harness/subagents/*.json + registration plugin',
     },
     nuances: [

@@ -15,7 +15,7 @@ chores the user never asked for.
 
 ## Rules
 
-Three files, compiled into the `AGENTS.md` managed block:
+Three files, compiled into the generated `AGENTS.md`:
 
 - `rules/source-of-truth.md` — the source directory is the only source of
   truth; never edit generated config; put changes in the source and rerun

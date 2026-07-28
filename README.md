@@ -95,14 +95,14 @@ machine-local overlay, gitignore it):
 | permissions.jsonc | `permissions` block | `.codex/rules/*.rules` (Starlark) ⁵ | — | — | — |
 | settings/ | rest of settings.json | rest of config.toml | — | — | — |
 
-¹ One prose channel: all rules compile into a marker-delimited block in
+¹ One prose channel: all rules compile into a fully generated
 `AGENTS.md`, which codex, cursor, opencode, and hermes
 read natively. Claude Code doesn't, so it gets a generated `CLAUDE.md`
 containing `@AGENTS.md` — a real file, never a symlink (Claude refuses to
-write through a symlinked `CLAUDE.md`); if your `CLAUDE.md` already imports
-`AGENTS.md`, it's left alone. **Both files stay yours:** everything outside
-`<!-- meta-harness:start -->…<!-- meta-harness:end -->` is preserved verbatim
-and never counts as drift. `paths:`/`globs:` on a rule is an error —
+write through a symlinked `CLAUDE.md`). **Both files are outputs**, fully
+generated from `rules/` — never edit them; project prose is just another
+rules file (`root: true` makes it lead the file).
+`paths:`/`globs:` on a rule is an error —
 `AGENTS.md` loads unconditionally, so there is no conditional-load channel.
 ² Global-only in that tool (`~/`); meta-harness never writes outside the project.
 ³ Real dialect translation per target — field renames, `type` handling,

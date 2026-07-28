@@ -76,7 +76,7 @@ it instead of hand-producing its output — hand-written output is exactly what
 
 Some things sit outside the compiler and are yours to handle directly:
 
-- **`AGENTS.md` and `CLAUDE.md`** — partly managed. Rules compile into one marker-delimited block in `AGENTS.md` (the single prose channel — every runtime reads it natively except Claude, which gets a generated `CLAUDE.md` stub importing `@AGENTS.md`). Everything outside the markers is the user's and preserved. Write their project prose there; never edit inside the markers. When writing or reviewing that prose — or any `rules/` file — follow `references/agents-md.md`: every line must earn its place, and bloat measurably hurts.
+- **`AGENTS.md` and `CLAUDE.md`** — fully generated from `rules/`. `AGENTS.md` is the single prose channel (every runtime reads it natively except Claude, which gets a generated `CLAUDE.md` stub importing `@AGENTS.md`). Never edit either output — project prose is just another rules file (e.g. `rules/project.md` with `root: true` so it leads the file). When writing any `rules/` file, follow `references/agents-md.md`: every line must earn its place, and bloat measurably hurts.
 - **Skills** — `npx skills add <package>` owns skill directories and `skills-lock.json`.
 - **Codex directory trust** — project hooks *and* exec policies (`.codex/rules/`) load only after the user opens `codex` once and accepts the trust prompt. Until then a `deny` permission silently does not stop anything, verified against codex 0.145. Tell them; you cannot do it for them.
 - **Anything in `~/`** — global config is deliberately out of scope.
