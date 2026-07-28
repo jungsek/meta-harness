@@ -314,6 +314,143 @@ test('cursor config is inventoried, never touched', () => {
   assert.equal(read(root, '.cursor/mcp.json'), before, 'inventory-only target is left byte-identical')
 })
 
+/* ── regressions from the §7.3 review ───────────────────────────────────── */
+
+test('native deletion of a managed item folds back instead of being restored', () => {
+  const root = managed()
+  const settings = readJson(root, '.claude/settings.json')
+  delete settings.env.FOO
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.imports.map((i) => `${i.category}/${i.name}/${i.kind}`),
+    ['env/FOO/removed']
+  )
+
+  syncApply(root, {})
+  assert.deepEqual(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars, {}, 'deletion reached the source')
+  assert.ok(!('FOO' in (readJson(root, '.claude/settings.json').env ?? {})), 'not silently restored')
+  assert.ok(!readToml(root, '.codex/config.toml').shell_environment_policy?.set?.FOO, 'deletion propagated to codex')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('deleted natively + changed in the source is a conflict, not a silent restore', () => {
+  const root = managed()
+  const settings = readJson(root, '.claude/settings.json')
+  delete settings.env.FOO
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'moved-on' } }))
+
+  const plan = syncPlan(root, {})
+  assert.equal(plan.conflicts.length, 1)
+  assert.match(plan.conflicts[0].detail, /deleted natively/)
+  assert.throws(() => syncApply(root, {}), /--prefer/)
+
+  syncApply(root, { prefer: 'native' })
+  assert.deepEqual(JSON.parse(read(root, '.meta-harness/env/env.jsonc')).vars, {})
+})
+
+test('a natively added hooks block in a managed settings.json is imported', () => {
+  const root = tmp()
+  write(root, 'meta-harness.jsonc', `{ "sourceDir": ".meta-harness", "targets": ["claude", "codex"] }`)
+  write(root, '.meta-harness/env/env.jsonc', JSON.stringify({ vars: { FOO: 'bar' } }))
+  generate(root)
+  // `hooks` is not an owned key of this settings.json — the file-level hash
+  // says "clean", only per-item ownership catches it
+  const settings = readJson(root, '.claude/settings.json')
+  settings.hooks = { PostToolUse: [{ matcher: 'Write', hooks: [{ type: 'command', command: 'fmt.sh' }] }] }
+  settings.statusLine = { type: 'command', command: 'line.sh' }
+  write(root, '.claude/settings.json', JSON.stringify(settings, null, 2) + '\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.imports.map((i) => `${i.category}/${i.name}/${i.kind}`).sort(),
+    ['hooks/PostToolUse/new', 'settings/statusLine/new']
+  )
+
+  syncApply(root, {})
+  assert.ok(JSON.parse(read(root, '.meta-harness/hooks/hooks.jsonc')).hooks.PostToolUse, 'hook reached the source')
+  assert.ok(readJson(root, '.codex/hooks.json').hooks.PostToolUse, 'and therefore codex')
+  assert.deepEqual(status(root).filter((r) => r.state !== 'clean' && r.state !== 'link'), [])
+})
+
+test('an untranslatable codex server is kept for codex, never imported then erased', () => {
+  const root = managed()
+  fs.appendFileSync(path.join(root, '.codex/config.toml'), '\n[mcp_servers."bad.name"]\ncommand = "npx"\nargs = ["-y", "x"]\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(
+    plan.unsupported.map((u) => u.target),
+    ['codex']
+  )
+  assert.match(plan.unsupported[0].reason, /not portable/)
+
+  syncApply(root, {})
+  assert.deepEqual(readToml(root, '.codex/config.toml').mcp_servers['bad.name'], { command: 'npx', args: ['-y', 'x'] })
+  assert.ok(
+    !JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers['bad.name'],
+    'stays out of the canonical map — claude cannot have it either'
+  )
+  assert.match(read(root, '.meta-harness/settings/codex.config.toml'), /bad\.name/)
+  // and the next run has nothing left to do
+  assert.deepEqual(syncPlan(root, {}).imports, [])
+})
+
+test('two targets defining the same item natively is fatal, whatever --prefer says', () => {
+  const root = tmp()
+  write(root, '.mcp.json', JSON.stringify({ mcpServers: { shared: { command: 'claude-native' } } }))
+  write(root, '.codex/config.toml', '[mcp_servers.shared]\ncommand = "codex-native"\n')
+  const before = { mcp: read(root, '.mcp.json'), codex: read(root, '.codex/config.toml') }
+
+  const plan = syncPlan(root, { targets: TARGETS, prefer: 'native' })
+  const fatal = plan.conflicts.find((c) => c.fatal)
+  assert.ok(fatal, 'reported as a conflict')
+  assert.equal(fatal.source, null, 'neither value is labelled as coming from the source')
+  assert.deepEqual(fatal.sides, [
+    { target: 'claude', value: { command: 'claude-native' } },
+    { target: 'codex', value: { command: 'codex-native' } },
+  ])
+
+  for (const prefer of ['native', 'source']) {
+    assert.throws(() => syncApply(root, { targets: TARGETS, prefer }), /unresolvable/)
+    assert.equal(read(root, '.mcp.json'), before.mcp)
+    assert.equal(read(root, '.codex/config.toml'), before.codex)
+  }
+  assert.ok(!exists(root, 'meta-harness.jsonc'), 'nothing was written at all')
+})
+
+test('a fold that dies part-way leaves no half-written source dir', () => {
+  const root = claudeOnly()
+  const before = read(root, '.claude/settings.json')
+  // die on the second commit, i.e. after one source file has already landed
+  const realRename = fs.renameSync.bind(fs)
+  let n = 0
+  fs.renameSync = (a, b) => {
+    if (++n === 2) throw new Error('boom')
+    return realRename(a, b)
+  }
+  try {
+    assert.throws(() => syncApply(root, { targets: TARGETS }), /boom/)
+  } finally {
+    fs.renameSync = realRename
+  }
+
+  assert.ok(!exists(root, 'meta-harness.jsonc'), 'config only lands once the whole fold has committed')
+  assert.deepEqual(
+    fs.existsSync(path.join(root, '.meta-harness')) ? walkAll(root, '.meta-harness') : [],
+    [],
+    'the file that did land was rolled back'
+  )
+  assert.deepEqual(walkAll(root, '.').filter((n) => n.endsWith('.mh-sync-tmp')), [], 'no staging files left behind')
+  assert.equal(read(root, '.claude/settings.json'), before, 'native config untouched')
+})
+
+const walkAll = (root, rel) =>
+  fs
+    .readdirSync(path.join(root, rel), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walkAll(root, path.join(rel, e.name)) : [path.join(rel, e.name)]))
+
 test('repairs the .claude/skills mirror, never the skill itself', () => {
   const root = managed()
   write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')

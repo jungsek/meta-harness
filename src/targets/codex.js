@@ -17,7 +17,9 @@ const EVENTS = [
   'PostCompact',
 ]
 
-const NAME_OK = /^[a-zA-Z0-9_-]+$/
+// exported for src/sync.js: import must know which names this target can
+// carry, so it never folds one here that generate would then drop.
+export const NAME_OK = /^[a-zA-Z0-9_-]+$/
 const FIELD_MAP = { enabledTools: 'enabled_tools', disabledTools: 'disabled_tools', envVars: 'env_vars' }
 
 // Canonical (Claude-style) server map → Codex [mcp_servers] dialect.

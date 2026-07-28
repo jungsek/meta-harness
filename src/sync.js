@@ -29,6 +29,7 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { detectTargets, detectedNames } from './detect.js'
 import { discover, generate, loadConfig, loadManifest } from './engine.js'
 import { KNOWN_TARGETS } from './model.js'
+import { NAME_OK as CODEX_NAME_OK } from './targets/codex.js'
 import {
   canonicalJson,
   isLink,
@@ -79,20 +80,25 @@ function readNative(root, rel, format) {
 
 /* ── native → items ─────────────────────────────────────────────────────── */
 
+// Every item carries `key`: the top-level native key it lives under. That is
+// the granularity the manifest records ownership at (`ownedKeys` on a shared
+// file), so it is what says whether *this item* was ever generated — a
+// question the file-level entry cannot answer. A natively added `hooks` block
+// in a settings.json we own is unmanaged, not clean.
 const splitMcp = (d) =>
-  Object.entries(d.mcpServers ?? {}).map(([name, value]) => ({ category: 'connections', name, value }))
+  Object.entries(d.mcpServers ?? {}).map(([name, value]) => ({ category: 'connections', key: 'mcpServers', name, value }))
 
 function splitClaudeSettings(d) {
   const out = []
   for (const [k, v] of Object.entries(d)) {
-    if (k === 'hooks') for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'hooks', name, value })
-    else if (k === 'env') for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'env', name, value })
+    if (k === 'hooks') for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'hooks', key: k, name, value })
+    else if (k === 'env') for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'env', key: k, name, value })
     else if (k === 'enabledPlugins')
       for (const [name, value] of Object.entries(Array.isArray(v) ? Object.fromEntries(v.map((p) => [p, true])) : (v ?? {})))
-        out.push({ category: 'plugins', name, value })
+        out.push({ category: 'plugins', key: k, name, value })
     else if (k === 'permissions')
-      for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'permissions', name, value })
-    else out.push({ category: 'settings', name: k, value: v })
+      for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'permissions', key: k, name, value })
+    else out.push({ category: 'settings', key: k, name: k, value: v })
   }
   return out
 }
@@ -106,14 +112,14 @@ function splitCodexConfig(d) {
   const out = []
   for (const [k, v] of Object.entries(d)) {
     if (k === 'mcp_servers')
-      for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'connections', name, value })
+      for (const [name, value] of Object.entries(v ?? {})) out.push({ category: 'connections', key: k, name, value })
     else if (k === 'shell_environment_policy')
       for (const [pk, pv] of Object.entries(v ?? {})) {
-        if (pk === 'set') for (const [name, value] of Object.entries(pv ?? {})) out.push({ category: 'env', name, value })
-        else out.push({ category: 'env', name: `policy.${pk}`, value: pv })
+        if (pk === 'set') for (const [name, value] of Object.entries(pv ?? {})) out.push({ category: 'env', key: k, name, value })
+        else out.push({ category: 'env', key: k, name: `policy.${pk}`, value: pv })
       }
-    else if (CODEX_PERMISSION_KEYS.includes(k)) out.push({ category: 'permissions', name: k, value: v })
-    else out.push({ category: 'settings', name: k, value: v })
+    else if (CODEX_PERMISSION_KEYS.includes(k)) out.push({ category: 'permissions', key: k, name: k, value: v })
+    else out.push({ category: 'settings', key: k, name: k, value: v })
   }
   return out
 }
@@ -128,7 +134,7 @@ const SURFACES = {
     {
       file: '.codex/hooks.json',
       format: 'json',
-      split: (d) => Object.entries(d.hooks ?? {}).map(([name, value]) => ({ category: 'hooks', name, value })),
+      split: (d) => Object.entries(d.hooks ?? {}).map(([name, value]) => ({ category: 'hooks', key: 'hooks', name, value })),
     },
   ],
 }
@@ -169,33 +175,49 @@ function dataItems(ctx, target, { file, format, split }) {
       ? ownedHashOf(expData, exp?.keys ?? []) !== entry.ownedHash
       : sha256(exp ? exp.content : '') !== entry.hash
   const expIdx = index(split(expData))
-  return split(native.data).map((item) => {
-    const e = expIdx.get(`${item.category}/${item.name}`)
-    return {
+  const natIdx = index(split(native.data))
+  // Union, so absence is a value: an item the manifest says we wrote and
+  // that is now gone from the native file is a deletion, and deletions are
+  // native changes like any other (§1 row 2). Iterating native keys alone
+  // made them invisible, and force-generate then silently put them back.
+  const out = []
+  for (const key of new Set([...natIdx.keys(), ...expIdx.keys()])) {
+    const n = natIdx.get(key)
+    const e = expIdx.get(key)
+    out.push({
       target,
       file,
-      category: item.category,
-      name: item.name,
-      value: item.value,
+      category: (n ?? e).category,
+      name: (n ?? e).name,
+      value: n?.value,
+      hasNative: Boolean(n),
       expected: e?.value,
       hasExpected: Boolean(e),
-      tracked,
+      // Ownership is per top-level key on a shared file; the whole file
+      // otherwise.
+      tracked: itemTracked(entry, (n ?? e).key),
       nativeChanged,
       sourceChanged,
-    }
-  })
+    })
+  }
+  return out
 }
+
+const itemTracked = (entry, key) => Boolean(entry) && (entry.ownedKeys ? entry.ownedKeys.includes(key) : true)
 
 function fileItems(ctx, target, { dir, category, ext }) {
   const abs = path.join(ctx.root, dir)
-  if (!fs.existsSync(abs)) return []
+  const onDisk = fs.existsSync(abs) ? fs.readdirSync(abs).filter((n) => n.endsWith(ext)) : []
+  // Union again: an output the manifest lists under this dir that is no
+  // longer on disk was deleted natively.
+  const known = [...ctx.expected.keys()].filter((p) => path.dirname(p) === dir && p.endsWith(ext)).map((p) => path.basename(p))
   const out = []
-  for (const name of fs.readdirSync(abs).sort()) {
-    if (!name.endsWith(ext)) continue
+  for (const name of [...new Set([...onDisk, ...known])].sort()) {
     const rel = path.join(dir, name)
     const p = path.join(abs, name)
     const entry = ctx.manifest.files[rel]
-    if (isLink(p)) {
+    const present = onDisk.includes(name)
+    if (present && isLink(p)) {
       // Ours (commands are symlinked into the source) or the user's own link
       // to a file we don't own. Either way there is nothing to import.
       if (!entry) ctx.warnings.push(`${rel}: symlink meta-harness did not write — left alone, not imported`)
@@ -203,7 +225,7 @@ function fileItems(ctx, target, { dir, category, ext }) {
     }
     const exp = ctx.expected.get(rel)
     const expected = exp ? (exp.content ?? readIf(exp.symlinkTo) ?? undefined) : undefined
-    const raw = fs.readFileSync(p, 'utf8')
+    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
     const tracked = Boolean(entry)
     out.push({
       target,
@@ -211,12 +233,13 @@ function fileItems(ctx, target, { dir, category, ext }) {
       category,
       name: path.basename(name, ext),
       value: raw,
+      hasNative: present,
       expected,
       hasExpected: expected !== undefined,
       tracked,
-      // A manifest symlink entry against a real file means someone replaced
-      // our link with their own file: native changed, by definition.
-      nativeChanged: !tracked ? true : entry.symlink ? true : sha256(raw) !== entry.hash,
+      // A manifest symlink entry against a real file (or nothing at all)
+      // means someone replaced or removed our link: native changed.
+      nativeChanged: !tracked ? true : entry.symlink || !present ? true : sha256(raw) !== entry.hash,
       // Symlinked outputs carry no content hash, so a source-side edit is
       // invisible to the manifest — treat source as unmoved and let the
       // native file fold back over it.
@@ -244,6 +267,7 @@ function rulesItems(ctx) {
       category: 'rules',
       name: rel,
       value: raw,
+      hasNative: true,
       expected,
       hasExpected: expected !== undefined,
       tracked,
@@ -294,6 +318,13 @@ function walk(dir, prefix = '') {
 }
 
 function classify(it) {
+  if (!it.hasNative) {
+    // Gone from the native file. Only a deletion if we put it there and the
+    // native surface has moved since; otherwise it is simply an item the
+    // source grew and generate has not emitted yet.
+    if (!it.tracked || !it.nativeChanged) return 'generate'
+    return it.sourceChanged ? 'conflict' : 'removed'
+  }
   if (it.hasExpected && eq(it.value, it.expected)) return 'clean'
   // Native matches the baseline: whatever differs came from the source side,
   // including deletions. Forward generate owns it.
@@ -362,22 +393,51 @@ function foldAll(ctx, items) {
       claims.set(slot, { value, target: it.target })
       return true
     }
+    // Both values are native and they disagree. `--prefer native` cannot
+    // choose between two natives, and scan order is not a decision — so this
+    // one is fatal whatever the flag says. No `source` field either: neither
+    // value came from the source dir, and labelling one that way would lie
+    // to anything reading the plan.
     conflicts.push({
       target: it.target,
       category: it.category,
       name: it.name,
-      source: prev.value,
+      fatal: true,
+      // Authoritative pair. `source` stays null rather than holding one of
+      // the two native values: nothing here came from the source dir, and a
+      // consumer reading `source` must not be told otherwise.
+      sides: [
+        { target: prev.target, value: prev.value },
+        { target: it.target, value },
+      ],
+      source: null,
       native: value,
-      detail: `also imported from ${prev.target} with a different value — kept ${prev.target}'s`,
+      detail: `${prev.target} and ${it.target} both define it natively, with different values — --prefer cannot pick; make them agree (or delete one) and rerun`,
     })
     return false
   }
 
-  for (const it of items) fold(it)
+  for (const it of items) (it.kind === 'removed' ? unfold : fold)(it)
 
   function fold(it) {
     switch (it.category) {
       case 'connections': {
+        // Codex refuses server names outside its charset, so the forward
+        // translator drops them (targets/codex.js NAME_OK). Importing one
+        // into the canonical map would hand it to a generate that then
+        // deletes it from the only target that had it. §2's answer for an
+        // untranslatable native key: keep it in that target's own settings
+        // file, verbatim, and report it.
+        if (it.target === 'codex' && !CODEX_NAME_OK.test(it.name)) {
+          const d = doc('settings/codex.config.toml', 'toml')
+          if (claim(`codex-mcp:${it.name}`, it.value, it)) (d.mcp_servers ??= {})[it.name] = it.value
+          ctx.unsupported.push({
+            target: 'codex',
+            path: `.codex/config.toml [mcp_servers."${it.name}"]`,
+            reason: `server name is not portable (codex accepts ${CODEX_NAME_OK.source}) — kept verbatim in ${ctx.cfg.sourceDir}/settings/codex.config.toml, codex only`,
+          })
+          break
+        }
         const v = it.target === 'codex' ? fromCodexServer(it.value) : it.value
         const d = doc('connections/mcp.jsonc', 'jsonc')
         if (claim(`mcp:${it.name}`, v, it)) (d.mcpServers ??= {})[it.name] = v
@@ -419,6 +479,64 @@ function foldAll(ctx, items) {
         break
       case 'rules':
         foldRules(it)
+        break
+    }
+  }
+
+  // The mirror of fold(): the item is gone from the native file, so take it
+  // out of the source too. Only reached for items inside a config file we
+  // rewrite anyway — a deleted command/agent FILE is classified as a
+  // conflict instead, because folding that would delete a source file the
+  // user authored, and `rm` on a generated symlink is too light a gesture
+  // for that. `--prefer native` still does it.
+  function unfold(it) {
+    const gone = (t) => ctx.warnings.push(`${it.category}: "${it.name}" was deleted from ${it.target} — removing it from the source drops it from ${t} too`)
+    switch (it.category) {
+      case 'connections': {
+        const d = doc('connections/mcp.jsonc', 'jsonc')
+        if (d.mcpServers) delete d.mcpServers[it.name]
+        for (const t of KNOWN_TARGETS) if (d[t]?.mcpServers && it.name in d[t].mcpServers) gone(t)
+        break
+      }
+      case 'hooks': {
+        const d = doc('hooks/hooks.jsonc', 'jsonc')
+        if (d.hooks) delete d.hooks[it.name]
+        break
+      }
+      case 'env': {
+        const d = doc('env/env.jsonc', 'jsonc')
+        if (it.name.startsWith('policy.')) delete d.codex?.shell_environment_policy?.[it.name.slice('policy.'.length)]
+        else if (d.vars) delete d.vars[it.name]
+        break
+      }
+      case 'plugins': {
+        const d = doc('plugins/plugins.jsonc', 'jsonc')
+        if (Array.isArray(d.enabledPlugins)) d.enabledPlugins = d.enabledPlugins.filter((p) => p !== it.name)
+        break
+      }
+      case 'permissions': {
+        const d = doc('permissions/permissions.jsonc', 'jsonc')
+        if (it.target === 'codex') delete d.codex?.[it.name]
+        else {
+          delete d.claude?.permissions?.[it.name]
+          // A bucket maps to every unified rule carrying that decision.
+          for (const entries of Object.values(d.permission ?? {}))
+            for (const [pattern, decision] of Object.entries(entries)) if (decision === it.name) delete entries[pattern]
+        }
+        break
+      }
+      case 'settings': {
+        const rel = it.target === 'claude' ? 'settings/claude.settings.jsonc' : 'settings/codex.config.toml'
+        delete doc(rel, it.target === 'claude' ? 'jsonc' : 'toml')[it.name]
+        break
+      }
+      // Only reachable via --prefer native (see the classify override): the
+      // user chose to let the deletion take the source file with it.
+      case 'commands':
+        texts.set(`commands/${it.name}.md`, null)
+        break
+      case 'agents':
+        texts.set(`agents/${it.name}.md`, null)
         break
     }
   }
@@ -538,13 +656,18 @@ function previewGenerates(ctx, writes) {
   try {
     const realSrc = path.join(ctx.root, ctx.cfg.sourceDir)
     if (fs.existsSync(realSrc)) fs.cpSync(realSrc, tmp, { recursive: true })
-    for (const w of writes) writeFileEnsured(path.join(tmp, w.rel), w.content)
+    for (const w of writes) {
+      const abs = path.join(tmp, w.rel)
+      if (w.content === null) fs.rmSync(abs, { force: true })
+      else writeFileEnsured(abs, w.content)
+    }
     const res = discover(ctx.root, { ...ctx.cfg, sourceDir: path.relative(ctx.root, tmp) }, {
       only: null,
       targetNames: ctx.targetNames,
     })
     const changed = res.files.filter((f) => wouldChange(ctx.root, f, tmp, realSrc))
     return {
+      files: res.files,
       generates: changed
         .map((f) => ({ target: ownerOf(f.path), path: f.path }))
         .sort((a, b) => a.target.localeCompare(b.target) || a.path.localeCompare(b.path)),
@@ -553,6 +676,55 @@ function previewGenerates(ctx, writes) {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
+}
+
+// Is `a` still there in `b` after a round trip? Not equality: a forward
+// translator may add (other rules join a permissions bucket) or drop what
+// carries no meaning (an empty table codex rejects). Anything else missing
+// is a value the import would have deleted from the target it came from.
+function retained(a, b) {
+  if (Array.isArray(a)) return Array.isArray(b) && a.every((x) => b.some((y) => eq(x, y)))
+  if (isObj(a)) {
+    if (!isObj(b)) return false
+    return Object.entries(a).every(([k, v]) => {
+      if (!(k in b)) return (isObj(v) || Array.isArray(v)) && Object.keys(v).length === 0
+      return retained(v, b[k])
+    })
+  }
+  return eq(a, b)
+}
+
+// §7.3 backstop. Every item we import gets re-emitted to the target it came
+// from — unless a forward translator cannot carry it, in which case importing
+// it would move the value into the source and then delete it from the only
+// place it existed. Refuse instead; the caller reports it as unsupported.
+function lostInTranslation(ctx, items, previewFiles, conflicts) {
+  const byPath = new Map(previewFiles.map((f) => [f.path, f]))
+  const specs = new Map(Object.values(SURFACES).flat().map((s) => [s.file, s]))
+  // Already fatal for another reason (two natives disagreeing drops one of
+  // them by construction) — one report per problem.
+  const known = new Set(conflicts.filter((c) => c.fatal).map((c) => `${c.category}/${c.name}`))
+  const out = []
+  for (const it of items) {
+    const spec = specs.get(it.file)
+    if (!spec || !it.hasNative || it.kind === 'removed' || known.has(`${it.category}/${it.name}`)) continue
+    const f = byPath.get(it.file)
+    let emitted = {}
+    try {
+      emitted = f ? (f.shared ? f.data : FORMATS[spec.format](f.content, it.file)) : {}
+    } catch {
+      /* preview unparseable — the item is certainly not safely there */
+    }
+    const found = index(spec.split(emitted)).get(`${it.category}/${it.name}`)
+    if (found && retained(it.value, found.value)) continue
+    out.push({
+      target: it.target,
+      path: `${it.file} ${it.category}/${it.name}`,
+      fatal: true,
+      reason: `importing it would drop it from ${it.target} — ${it.target} cannot re-emit this value from the source. Leave it where it is (sync wrote nothing) or move it out of ${it.file} by hand.`,
+    })
+  }
+  return out
 }
 
 export function syncPlan(root, { targets = null, prefer = null } = {}) {
@@ -566,7 +738,17 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   const targetNames = targets ?? (mode === 'bootstrap' ? (detected.length ? detected : cfg.targets) : cfg.targets)
   const enabled = targetNames.includes('*') ? KNOWN_TARGETS : targetNames
 
-  const ctx = { root, cfg, mode, targetNames, enabled, warnings: [], expected: new Map(), manifest: { files: {} } }
+  const ctx = {
+    root,
+    cfg,
+    mode,
+    targetNames,
+    enabled,
+    warnings: [],
+    unsupported: [],
+    expected: new Map(),
+    manifest: { files: {} },
+  }
   if (mode === 'reconcile') {
     ctx.manifest = loadManifest(root, cfg)
     const d = discover(root, cfg, { only: null, targetNames })
@@ -585,6 +767,9 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
     // conflict, so the user picks: keep the edit (--prefer native, imported
     // verbatim) or discard it (--prefer source).
     if (it.category === 'rules' && it.tracked && kind === 'changed') kind = 'conflict'
+    // Same reasoning for a deleted command/agent: unfolding it means deleting
+    // a source file. Explicit resolution only.
+    if (kind === 'removed' && ['commands', 'agents', 'rules'].includes(it.category)) kind = 'conflict'
     if (kind === 'clean') {
       clean.push({ target: it.target, category: it.category, name: it.name })
       continue
@@ -601,9 +786,13 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
         detail:
           it.category === 'rules' && it.tracked
             ? 'generated file was hand-edited — prose belongs in a rules/ file'
-            : 'changed in the source and natively since the last generate',
+            : !it.hasNative
+              ? 'deleted natively, changed in the source'
+              : it.category === 'commands' || it.category === 'agents'
+                ? 'deleted natively — --prefer native removes the source file too'
+                : 'changed in the source and natively since the last generate',
       })
-      if (prefer === 'native') toFold.push(it)
+      if (prefer === 'native') toFold.push({ ...it, kind: it.hasNative ? 'changed' : 'removed' })
       continue
     }
     imports.push({
@@ -611,21 +800,33 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
       category: it.category,
       name: it.name,
       kind,
-      detail: kind === 'new' ? (it.tracked ? 'added natively' : 'unmanaged') : 'edited natively',
+      detail:
+        kind === 'removed'
+          ? 'deleted natively'
+          : kind === 'new'
+            ? it.tracked
+              ? 'added natively'
+              : 'unmanaged'
+            : 'edited natively',
     })
-    toFold.push(it)
+    toFold.push({ ...it, kind })
   }
 
   const folded = foldAll(ctx, toFold)
   for (const c of folded.conflicts) conflicts.push({ ...c, prefer })
   const preview = previewGenerates(ctx, folded.writes)
+  const unsupported = [
+    ...inventory(ctx),
+    ...ctx.unsupported,
+    ...lostInTranslation(ctx, toFold, preview.files, conflicts),
+  ]
 
   return {
     mode,
     targets: enabled,
     imports,
     conflicts,
-    unsupported: inventory(ctx),
+    unsupported,
     generates: preview.generates,
     clean,
     warnings: [...ctx.warnings, ...preview.warnings],
@@ -665,8 +866,63 @@ function repairSkillMirror(root) {
   return out
 }
 
+// Stage every source write, then commit. Two phases so a failure — full
+// disk, EISDIR, a kill — leaves either the whole fold or none of it, never a
+// half-built source dir that the next run would treat as a real reconcile
+// base. Rename within a directory is atomic; the pre-images make the commit
+// loop reversible if one of them fails.
+function commitWrites(root, writes) {
+  const staged = []
+  const clean = () => {
+    for (const s of staged) fs.rmSync(s.tmp, { force: true })
+  }
+  try {
+    for (const w of writes) {
+      const abs = path.join(root, w.path)
+      const prev = readIf(abs)
+      if (w.content === null) {
+        staged.push({ abs, tmp: null, prev })
+        continue
+      }
+      const tmp = `${abs}.mh-sync-tmp`
+      writeFileEnsured(tmp, w.content)
+      staged.push({ abs, tmp, prev })
+    }
+  } catch (e) {
+    clean()
+    throw e
+  }
+  const done = []
+  try {
+    for (const s of staged) {
+      if (s.tmp === null) fs.rmSync(s.abs, { force: true })
+      else fs.renameSync(s.tmp, s.abs)
+      done.push(s)
+    }
+  } catch (e) {
+    for (const d of done) {
+      if (d.prev === null) fs.rmSync(d.abs, { force: true })
+      else writeFileEnsured(d.abs, d.prev)
+    }
+    clean()
+    throw e
+  }
+}
+
 export function syncApply(root, { targets = null, prefer = null, dryRun = false } = {}) {
   const plan = syncPlan(root, { targets, prefer })
+  // Fatal items are not resolvable by --prefer: two natives disagreeing
+  // (prefer cannot name a side) or a value no target could carry back.
+  const fatal = [...plan.conflicts.filter((c) => c.fatal), ...plan.unsupported.filter((u) => u.fatal)]
+  if (fatal.length) {
+    const err = new Error(
+      `sync stopped — ${fatal.length} unresolvable item${fatal.length > 1 ? 's' : ''} (nothing was written):\n` +
+        fatal.map((f) => `  ${f.target} ${f.path ?? `${f.category}/${f.name}`}\n    ${f.detail ?? f.reason}`).join('\n')
+    )
+    err.conflicts = plan.conflicts.filter((c) => c.fatal)
+    err.unsupported = plan.unsupported.filter((u) => u.fatal)
+    throw err
+  }
   if (plan.conflicts.length && !prefer) {
     const err = new Error(
       `sync stopped — ${plan.conflicts.length} conflict${plan.conflicts.length > 1 ? 's' : ''} (changed in the source and natively):\n` +
@@ -706,13 +962,19 @@ export function syncApply(root, { targets = null, prefer = null, dryRun = false 
   }
   guard()
 
+  // The fold commits first, and meta-harness.jsonc only after it: a config
+  // file pointing at a source dir that was never completely written is what
+  // turns a failed bootstrap into a bad reconcile base on the next run.
+  commitWrites(root, plan.sourceWrites)
   if (plan.mode === 'bootstrap' && !fs.existsSync(path.join(root, 'meta-harness.jsonc')))
-    writeFileEnsured(
-      path.join(root, 'meta-harness.jsonc'),
-      `{\n  // source-of-truth directory\n  "sourceDir": "${cfg.sourceDir}",\n` +
-        `  // targets to generate (see: meta-harness targets); "*" = all\n  "targets": ${JSON.stringify(plan.targets)}\n}\n`
-    )
-  for (const w of plan.sourceWrites) writeFileEnsured(path.join(root, w.path), w.content)
+    commitWrites(root, [
+      {
+        path: 'meta-harness.jsonc',
+        content:
+          `{\n  // source-of-truth directory\n  "sourceDir": "${cfg.sourceDir}",\n` +
+          `  // targets to generate (see: meta-harness targets); "*" = all\n  "targets": ${JSON.stringify(plan.targets)}\n}\n`,
+      },
+    ])
 
   guard()
 
