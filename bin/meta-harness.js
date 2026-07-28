@@ -389,9 +389,6 @@ program
     const skilled = opts.skill ? installSkill('meta-harness') : false
     if (opts.skill && !skilled)
       console.warn(yellow('warn: could not install the meta-harness skill — run it yourself:\n      npx skills add jungsek/meta-harness --skill meta-harness'))
-    const auditSkilled = opts.skill ? installSkill('meta-harness-audit') : false
-    if (opts.skill && !auditSkilled)
-      console.warn(yellow('warn: could not install the meta-harness-audit skill — run it yourself:\n      npx skills add jungsek/meta-harness --skill meta-harness-audit'))
 
     console.log(
       `\n${bold('next — pick a path:')}\n\n` +

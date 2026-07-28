@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.1 — 2026-07-28
+
+- **One skill, not two.** `meta-harness-audit` folded into the main skill as
+  `references/audit.md` — same maintenance flow, loaded on demand when a
+  drift/audit ask routes there. The split bought only a second invocation
+  name and cost a second install, a second catalog entry, and overlapping
+  trigger descriptions competing for the same asks. `init` installs one
+  skill again; audit reaches Codex/Claude through the one skill's routing.
+
 ## 0.19.0 — 2026-07-28
 
 - **`meta-harness sync`.** Reconciles native config with the source dir
