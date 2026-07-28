@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { emitAgentsMd, END, extractBlock, START, spliceBlock } from './agentsmd.js'
+import { emitAgentsMd, END, legacyProse, START } from './agentsmd.js'
 import { loadModel } from './model.js'
 import { targets as registry } from './targets/index.js'
 import {
@@ -95,12 +95,10 @@ function detectUnmanaged(root, files, manifest) {
     if (manifest.files[f.path]) continue
     const abs = path.join(root, f.path)
     if (!fs.existsSync(abs) && !isLink(abs)) continue
-    // Shared files and marker files merge rather than replace, so existing
-    // content normally survives on its own terms — but only when the merge
-    // can actually see it. An unparseable shared file would be overwritten
-    // wholesale, and a stray unpaired marker would make the next extract
-    // pair across user prose. Both get the same refusal as any other
-    // unmanaged path instead of a silent lossy write.
+    // Shared files merge rather than replace, so existing content normally
+    // survives on its own terms — but only when the merge can actually see
+    // it. An unparseable shared file would be overwritten wholesale, so it
+    // gets the same refusal as any other unmanaged path.
     if (f.shared) {
       try {
         parseByFormat(f.format, fs.readFileSync(abs, 'utf8'))
@@ -109,11 +107,6 @@ function detectUnmanaged(root, files, manifest) {
         out.push(f.path)
         continue
       }
-    }
-    if (f.markerFile) {
-      const raw = fs.readFileSync(abs, 'utf8')
-      if ((raw.includes(START) || raw.includes(END)) && extractBlock(raw) === null) out.push(f.path)
-      continue
     }
     out.push(f.path)
   }
@@ -127,9 +120,9 @@ function detectDrift(root, manifest) {
     if (entry.symlink || !fs.existsSync(abs)) continue
     const raw = fs.readFileSync(abs, 'utf8')
     if (entry.marker) {
-      // Only our block counts — prose around it is the user's and always theirs.
-      const block = extractBlock(raw)
-      if (block === null || sha256(block) !== entry.blockHash) drifted.push(rel)
+      // Legacy pre-0.18 co-owned block entry — always regenerate-worthy, but
+      // the migration guard below decides whether prose would be lost.
+      drifted.push(rel)
     } else if (entry.ownedKeys) {
       try {
         const data = parseByFormat(entry.format, raw)
@@ -178,6 +171,20 @@ export function generate(root, { check = false, force = false, only = null, targ
   const { files, warnings } = discover(root, cfg, { only, targetNames })
   const result = { written: [], pruned: [], drifted: [], unchanged: [], warnings }
 
+  // Migration off the pre-0.18 co-owned AGENTS.md/CLAUDE.md block: these are
+  // whole-file outputs now, so a file still carrying the old markers gets a
+  // refusal that names the fix — never a silent clobber of prose the user
+  // wrote outside the block.
+  if (!force)
+    for (const f of files) {
+      if (f.shared || f.symlinkTo) continue
+      const raw = readIf(path.join(root, f.path))
+      if (raw === null || (!raw.includes(START) && !raw.includes(END))) continue
+      throw new Error(
+        `${f.path} carries pre-0.18 managed-block markers — AGENTS.md and CLAUDE.md are now fully generated. Move any hand-written prose into a rules/ file (e.g. rules/project.md with "root: true"), then rerun with --force to overwrite.`
+      )
+    }
+
   const unmanaged = detectUnmanaged(root, files, manifest)
   result.drifted = [...new Set([...detectDrift(root, manifest), ...unmanaged])]
   if (result.drifted.length && !force) {
@@ -208,10 +215,7 @@ export function generate(root, { check = false, force = false, only = null, targ
       continue
     }
     let content, entry
-    if (out.markerFile) {
-      content = spliceBlock(readIf(abs), out.block)
-      entry = { marker: true, blockHash: sha256(out.block) }
-    } else if (out.shared) {
+    if (out.shared) {
       const prev = manifest.files[out.path]
       const m = mergeShared(root, out, prev?.ownedKeys, warnings, Boolean(only || targets))
       content = m.content
@@ -263,12 +267,13 @@ function pruneEntry(root, rel, entry, check, result) {
     } catch {}
   }
   if (entry.marker) {
+    // Legacy pre-0.18 co-owned block entry: remove only our block, keep the
+    // user's surrounding prose — same contract the old splice made.
     const raw = readIf(abs)
-    const block = raw === null ? null : extractBlock(raw)
-    if (block !== null) {
+    const prose = raw === null ? null : legacyProse(raw)
+    if (raw !== null && prose !== null) {
       if (!check) {
-        const rest = raw.replace(block, '').replace(/\n{3,}/g, '\n\n').trim()
-        if (rest) writeFileEnsured(abs, rest + '\n')
+        if (prose) writeFileEnsured(abs, prose + '\n')
         else rm(abs)
       }
       result.pruned.push(rel)
@@ -373,10 +378,8 @@ export function status(root) {
     let state
     if (entry.symlink) state = isLink(abs) ? 'link' : 'MISSING'
     else if (!fs.existsSync(abs)) state = 'MISSING'
-    else if (entry.marker) {
-      const block = extractBlock(fs.readFileSync(abs, 'utf8'))
-      state = block === null ? 'MISSING' : sha256(block) === entry.blockHash ? 'clean' : 'EDITED'
-    } else if (entry.ownedKeys) {
+    else if (entry.marker) state = 'EDITED' // legacy pre-0.18 block entry — regenerate to migrate
+    else if (entry.ownedKeys) {
       try {
         state =
           ownedHashOf(parseByFormat(entry.format, fs.readFileSync(abs, 'utf8')), entry.ownedKeys) === entry.ownedHash

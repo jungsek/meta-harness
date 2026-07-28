@@ -1,8 +1,9 @@
 # Writing AGENTS.md / CLAUDE.md
 
-How to write and maintain the prose instruction file. Applies to `rules/`
-source files (compiled into the AGENTS.md managed block) and to the user
-prose outside the markers alike — it is all one file to the agent reading it.
+How to write and maintain the prose instruction file. AGENTS.md is compiled
+entirely from `rules/` source files — project prose included (a rules file
+with `root: true` leads the output) — so this applies to every rules file;
+it is all one file to the agent reading it.
 Distilled from vendor guidance (Anthropic, OpenAI Codex, agents.md spec) and
 measured practice (GitHub's 2,500-repo study, ETH Zurich's context-file
 evaluation); sources listed at the end.
@@ -108,7 +109,7 @@ paraphrase it, so it stays diffable against its source:
 } > rules/behavioral-guidelines.md
 ```
 
-Then `generate` — the block reaches every target through AGENTS.md. The
+Then `generate` — the rules file reaches every target through AGENTS.md. The
 HTML provenance comment is stripped before Claude injection and harmless
 elsewhere. To update, re-fetch and read the diff before regenerating; to
 localize a rule, fork it below the comment and note the divergence.

@@ -22,18 +22,21 @@ npm-published CLI. All ratified decisions below still stand.
   hand-managed, out of scope.
 - **Outputs are committed.** Generated config is part of the repo; the
   manifest makes "these files are outputs" enforceable in CI.
-- **Identity files stay the user's.** `AGENTS.md` and `CLAUDE.md` are never
-  written *wholesale* — meta-harness owns one marker-delimited block in each
-  (`AGENTS.md` carries the rules; `CLAUDE.md` carries only the `@AGENTS.md`
-  import Claude needs) and preserves everything around it verbatim. A
-  `CLAUDE.md` that already imports `AGENTS.md` is left untouched.
+- **Identity files are outputs.** `AGENTS.md` and `CLAUDE.md` are fully
+  generated (`AGENTS.md` carries the rules; `CLAUDE.md` carries only the
+  `@AGENTS.md` import Claude needs) — same whole-file contract as every
+  other output. Project prose is a rules source file (`root: true` leads
+  the file). *Superseded 2026-07-28: the 0.16-era co-owned marker block —
+  one managed region spliced into a hand-written file — is gone; generate
+  refuses files still carrying the old markers until prose is moved into
+  `rules/`.*
 - **Own the encoding matrix.** Six targets × ~7 categories is small enough
   to maintain directly; correctness of each dialect beats breadth of tools.
 
 ## 2. Target scope decisions [ratified]
 
-- **rules (all targets, 2026-07-27)**: one channel — the managed `AGENTS.md`
-  block. Codex, Cursor, OpenCode, Hermes, and `.agents` runtimes read
+- **rules (all targets, 2026-07-27)**: one channel — the fully generated
+  `AGENTS.md`. Codex, Cursor, OpenCode, Hermes, and `.agents` runtimes read
   `AGENTS.md` natively; Claude gets a generated `CLAUDE.md` stub containing
   `@AGENTS.md` (real file, never a symlink — Claude refuses to write through
   a symlinked `CLAUDE.md`). No per-target rules dirs (`.claude/rules/`,
@@ -209,7 +212,7 @@ meta-harness uninstall [--force|--purge|--check|--json]  # kind-aware teardown o
    `sourceDir: ".harness"`. npm name `@jungsek/meta-harness` (unscoped
    blocked by registry name-similarity rule); bin command `meta-harness`.
 2. ~~rules/ → native rules dirs.~~ **Superseded 2026-07-27 (see §2 rules
-   entry):** all native rules dirs dropped; AGENTS.md block is the single
+   entry):** all native rules dirs dropped; AGENTS.md is the single
    prose channel, Claude via generated `CLAUDE.md` stub. Original finding
    stands: `.claude/rules/` confirmed in official docs
    (recursive, `paths:` frontmatter globs, symlinks OK). **Corrected
@@ -217,10 +220,10 @@ meta-harness uninstall [--force|--purge|--check|--json]  # kind-aware teardown o
    (`prefix_rule`, `decision="allow"`) parsed by `codex_execpolicy`, not
    prose instructions — verified in the shipped Codex binary alongside
    `core/src/agents_md.rs`, which loads the `AGENTS.md`/`AGENTS.override.md`
-   family. Prose therefore reaches Codex and Hermes only via AGENTS.md, so
-   meta-harness owns a marker-delimited block inside it (§6a) rather than
-   leaving those targets ruleless. The file itself stays the user's:
-   everything outside the block is preserved and never counts as drift.
+   family. Prose therefore reaches Codex and Hermes only via AGENTS.md.
+   *(2026-07-28: the marker-block co-ownership this decision introduced is
+   superseded — AGENTS.md is now a whole-file output; see §2 identity
+   files.)*
 3. ~~Permissions are ordinary settings keys; no unified format.~~
    **Reversed 2026-07-27.** The original reasoning — that translating
    permissions between dialects risks security bugs — did not survive
