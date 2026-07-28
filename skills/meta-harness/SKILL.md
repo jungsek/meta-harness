@@ -28,8 +28,9 @@ Three commands answer most questions, so ask the tool rather than guessing:
 currently contains).
 
 Maintaining a harness that already exists — drift, "claude and codex are out
-of sync", auditing config health — is the sibling `meta-harness-audit`
-skill's job, not this one's.
+of sync", auditing config health, deciding what to fold back or reject —
+follow `references/audit.md` (the sync dry-run is the data feed; never
+mutate before showing its plan).
 
 ## Building or changing a harness
 
@@ -104,4 +105,5 @@ built to prevent.
 - `references/interview.md` — guided path: mandatory repo scan, then two questions
 - `references/baseline.md` — recommended floor when the user gives no intent; merge, never copy
 - `references/agents-md.md` — how to write AGENTS.md/CLAUDE.md prose and `rules/`: what earns a line, length discipline, phrasing, monorepo nesting, maintenance
+- `references/audit.md` — maintenance flow: sync dry-run interpretation, drift report, apply/selective/exception
 - `references/review.md` — gap and best-practice checklist for audits

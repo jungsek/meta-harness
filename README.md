@@ -91,8 +91,8 @@ run, `sync` shows it either way. Claude and Codex get full backward
 translation (settings, hooks, MCP, permissions, hand-written `AGENTS.md`
 prose); Cursor/OpenCode/Hermes are inventory-only for now — found and
 reported, not yet folded in. For ongoing maintenance rather than a one-off
-run, the `meta-harness-audit` skill wraps this same command with drift
-diagnosis and a fix-it flow — `init` installs it alongside the main skill.
+run, ask the installed agent skill to audit the harness — it wraps this same
+command with drift diagnosis and a fix-it flow (`references/audit.md`).
 
 ## Source layout
 

@@ -1,17 +1,4 @@
----
-name: meta-harness-audit
-description: >-
-  Maintain an existing meta-harness install — check for drift between native
-  agent config and the source dir, surface unmanaged config one tool has that
-  another doesn't, and fold or reject it. Use this whenever someone asks to
-  audit their harness, wonders why "claude and codex are out of sync", asks
-  what changed in their agent config, wants a maintenance/health check, or
-  mentions drift, stale config, or hand-edited settings files. This is the
-  maintenance half of the meta-harness pair — for building or changing a
-  harness from scratch, use the sibling `meta-harness` skill instead.
----
-
-# meta-harness-audit
+# Audit / maintenance flow
 
 Read-only diagnosis first, mutation only with the user's go-ahead. Never runs
 `meta-harness sync` without `--dry-run` shown first — the plan report IS the
@@ -49,15 +36,13 @@ confirmation step.
      target-only debug hook). Note it in a `rules/` file or a comment near the
      relevant source entry so the next audit doesn't re-flag it as an
      oversight.
-4. **Quality pass.** Once config is in sync, check it against the sibling
-   skill's checklists, at `../meta-harness/references/review.md` (coverage +
-   smells) and `../meta-harness/references/agents-md.md` (prose discipline for
-   anything the sync folded into `rules/`) — paths relative to *this* file's
-   own directory. Both skills ship in one package, so the sibling is always
-   there; read it directly at that path. **Do not search the filesystem for
-   it** — no `find`, no glob, no home-directory scan. If it's genuinely not
-   at that path, say so and continue the audit without it. Report only
-   genuine gaps.
+4. **Quality pass.** Once config is in sync, check it against this skill's
+   own checklists: `references/review.md` (coverage + smells) and
+   `references/agents-md.md` (prose discipline for anything the sync folded
+   into `rules/`) — both live beside this file in the skill's references
+   directory; read them directly. **Do not search the filesystem for them** —
+   no `find`, no glob, no home-directory scan. If one is genuinely missing,
+   say so and continue the audit without it. Report only genuine gaps.
 
 ## Notes
 
