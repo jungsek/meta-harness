@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.2 — 2026-07-28
+
+- **The no-intent menu names all three paths.** The skill told agents to
+  offer two (interview, baseline); the third — write `HARNESS-INIT.md`
+  yourself and call the agent back — existed only when an agent improvised
+  it, so Codex sessions showed a two-option menu and Claude sessions three.
+  Now stated in the skill: interview / baseline / self-written request.
+
 ## 0.18.1 — 2026-07-28
 
 - **"Codex has no /meta-harness" is invocation syntax, not a missing skill.**
