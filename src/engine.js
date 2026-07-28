@@ -41,7 +41,9 @@ const serialize = (format, data) =>
 
 const parseByFormat = (format, raw) => (format === 'toml' ? parseToml(raw) : JSON.parse(raw))
 
-function discover(root, cfg, { only, targetNames }) {
+// exported for src/sync.js: the expected native surface, computed by the real
+// target modules rather than a second copy of their tables.
+export function discover(root, cfg, { only, targetNames }) {
   const srcDir = path.join(root, cfg.sourceDir)
   if (!fs.existsSync(srcDir)) throw new Error(`source dir not found: ${srcDir} — run: meta-harness init`)
   const model = loadModel(srcDir)
@@ -76,7 +78,7 @@ function discover(root, cfg, { only, targetNames }) {
   return { files, warnings }
 }
 
-const loadManifest = (root, cfg) => {
+export const loadManifest = (root, cfg) => {
   const raw = readIf(path.join(root, cfg.sourceDir, MANIFEST))
   return raw ? JSON.parse(raw) : { version: 2, files: {} }
 }
