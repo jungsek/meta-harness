@@ -499,6 +499,20 @@ function foldAll(ctx, items) {
 // What a follow-up generate would write, given the folded source. Built in a
 // throwaway dir so the plan stays a pure read of the repo, and computed by
 // the real target modules rather than a second copy of their path table.
+// Which target a generated file belongs under in the plan report. Same
+// signal detect.js reads to spot a lived-in target: the path prefix. Files
+// every runtime reads (AGENTS.md, CLAUDE.md, .mcp.json) group as 'shared',
+// matching the AGENTS.md import rows.
+const TARGET_DIRS = {
+  '.claude/': 'claude',
+  '.codex/': 'codex',
+  '.cursor/': 'cursor',
+  '.opencode/': 'opencode',
+  '.hermes/': 'hermes',
+}
+const ownerOf = (rel) =>
+  (rel === 'opencode.json' ? 'opencode' : Object.entries(TARGET_DIRS).find(([p]) => rel.startsWith(p))?.[1]) ?? 'shared'
+
 // Does this predicted output differ from what is on disk now? Keeps the plan
 // report to what sync would actually rewrite instead of the whole surface.
 // (Symlink targets point into the preview dir — rebase them onto the real
@@ -530,7 +544,12 @@ function previewGenerates(ctx, writes) {
       targetNames: ctx.targetNames,
     })
     const changed = res.files.filter((f) => wouldChange(ctx.root, f, tmp, realSrc))
-    return { generates: changed.map((f) => f.path).sort(), warnings: res.warnings }
+    return {
+      generates: changed
+        .map((f) => ({ target: ownerOf(f.path), path: f.path }))
+        .sort((a, b) => a.target.localeCompare(b.target) || a.path.localeCompare(b.path)),
+      warnings: res.warnings,
+    }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -658,8 +677,10 @@ export function syncApply(root, { targets = null, prefer = null, dryRun = false 
     throw err
   }
   const warnings = [...plan.warnings]
-  if (dryRun)
-    return { plan, written: plan.generates, pruned: [], warnings }
+  // `written` is a path list in both modes — same shape generate returns, so
+  // a caller can count or print it without knowing which mode ran. The
+  // target grouping for the report lives on plan.generates.
+  if (dryRun) return { plan, written: plan.generates.map((g) => g.path), pruned: [], warnings }
 
   const cfg = loadConfig(root)
   // The fold makes the source truthful about every native item sync looked

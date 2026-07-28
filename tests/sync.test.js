@@ -76,7 +76,17 @@ test('bootstrap: claude-only repo gains a working codex without questions', () =
   assert.equal(plan.conflicts.length, 0)
   assert.ok(plan.imports.some((i) => i.category === 'connections' && i.name === 'linear' && i.kind === 'new'))
   assert.ok(plan.imports.some((i) => i.category === 'rules' && i.name === 'AGENTS.md'))
-  assert.ok(plan.generates.includes('.codex/config.toml'), 'plan predicts the codex output')
+  // generates carries the target so the plan report can group by it (§3)
+  // …and .claude/settings.json is absent: the fold round-trips its owned
+  // keys exactly, so sync has nothing to rewrite on the side it imported from
+  assert.deepEqual(plan.generates, [
+    { target: 'codex', path: '.codex/config.toml' },
+    { target: 'codex', path: '.codex/hooks.json' },
+    { target: 'codex', path: '.codex/rules/meta-harness.rules' },
+    { target: 'shared', path: '.mcp.json' },
+    { target: 'shared', path: 'AGENTS.md' },
+    { target: 'shared', path: 'CLAUDE.md' },
+  ])
 
   const res = syncApply(root, { targets: TARGETS })
   assert.ok(res.written.includes('.codex/config.toml'))
@@ -130,6 +140,11 @@ test('reconcile: native MCP add + hook edit fold back and propagate', () => {
     ['connections/linear/new', 'hooks/PostToolUse/changed']
   )
   assert.ok(plan.clean.some((c) => c.category === 'env' && c.name === 'FOO'))
+
+  // --dry-run reports the same file set as a real run, as plain paths
+  const dry = syncApply(root, { dryRun: true })
+  assert.deepEqual(dry.written, plan.generates.map((g) => g.path))
+  assert.ok(!JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc')).mcpServers.linear, 'dry run wrote nothing')
 
   syncApply(root, {})
   const src = JSON.parse(read(root, '.meta-harness/connections/mcp.jsonc'))
