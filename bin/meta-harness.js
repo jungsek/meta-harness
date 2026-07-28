@@ -236,7 +236,10 @@ program
         `    ask any coding agent: "build my harness"\n` +
         `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
         `    ...or sketch it in ${cfg.sourceDir}/HARNESS-INIT.md first and let it build from that\n` +
-        `    ...or ask it to interview you if you'd rather be walked through it\n`
+        `    ...or ask it to interview you if you'd rather be walked through it\n\n` +
+        `  ${bold('invoking the skill')}\n` +
+        `    Claude Code: /meta-harness · Codex: $meta-harness or plain words (no slash —\n` +
+        `    and Codex only sees project skills after you accept its directory-trust prompt)\n`
     )
     if (fs.existsSync(path.join(root, 'node_modules/@jungsek/meta-harness')))
       console.log(

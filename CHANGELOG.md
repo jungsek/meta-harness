@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.1 — 2026-07-28
+
+- **"Codex has no /meta-harness" is invocation syntax, not a missing skill.**
+  Audited live on a fresh init with codex 0.145: the project skill IS in
+  Codex's catalog (`.agents/skills/meta-harness`, loaded once the directory
+  trust prompt is accepted) — but Codex has no slash skills; it invokes via
+  `$meta-harness` or natural language, `/meta-harness` is Claude-only. The
+  init epilogue and README now state the per-tool invocation and the trust
+  gate, so the first Codex session doesn't read as a broken install.
+
 ## 0.18.0 — 2026-07-28
 
 - **BREAKING: AGENTS.md and CLAUDE.md are now whole-file outputs.** The
