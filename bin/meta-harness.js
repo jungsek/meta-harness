@@ -187,10 +187,17 @@ function bootstrapBanner(plan, cfg, bold, dim) {
 
 // Neither tool reads project config until you have accepted its trust prompt —
 // the single most common "I ran it and nothing happened". Printed as steps,
-// not as warnings buried in a warn: stream.
-const TRUST_STEPS = {
-  codex: ['open codex here, accept the directory-trust prompt', 'then run /hooks and accept — until you do, hooks and deny rules quietly do nothing'],
-  claude: ['open claude here, accept the folder-trust prompt — project settings, hooks and permissions load after it'],
+// not as warnings buried in a warn: stream. Only steps that apply to what was
+// actually emitted: telling someone to accept /hooks when no hooks.json was
+// written sends them looking for a prompt about nothing.
+function trustSteps(target, emittedPaths) {
+  if (target === 'claude') return ['open claude here, accept the folder-trust prompt — project settings, hooks and permissions load after it']
+  if (target !== 'codex') return []
+  const gated = emittedPaths.some((p) => p === '.codex/hooks.json' || p.startsWith('.codex/rules/'))
+  return [
+    'open codex here, accept the directory-trust prompt',
+    ...(gated ? ['then run /hooks and accept — until you do, hooks and deny rules quietly do nothing'] : []),
+  ]
 }
 
 // The trust warnings the next: block now says better. Matched narrowly (codex
@@ -201,12 +208,11 @@ function printWarnings(warnings, targets, yellow) {
   for (const w of new Set(warnings ?? [])) if (!coveredByNext(w, targets)) console.warn(yellow(`warn: ${w}`))
 }
 
-function printNext(targets, { bold, dim }) {
-  const steps = targets.filter((t) => TRUST_STEPS[t])
+function printNext(targets, emittedPaths, { bold, dim }) {
+  const steps = targets.map((t) => [t, trustSteps(t, emittedPaths)]).filter(([, s]) => s.length)
   if (!steps.length) return
   console.log(`\n${bold('next:')}`)
-  for (const t of steps) {
-    const [first, ...rest] = TRUST_STEPS[t]
+  for (const [t, [first, ...rest]] of steps) {
     console.log(`  ${bold(t.padEnd(7))} ${first}`)
     for (const r of rest) console.log(`  ${' '.repeat(7)} ${r}`)
   }
@@ -266,21 +272,36 @@ function printProposed(root, enabled, planProposed, dim) {
     console.log(dim(`also detected: ${extra.join(', ')} — not enabled (experimental, one-way); add with --targets ${extra.join(',')} or meta-harness.jsonc`))
 }
 
-// F4: an empty repo has nothing to import and no source to compile. Say that,
-// don't fail with "source dir not found" as if the user did something wrong.
-function nothingToImport(root, cfg, bold, dim) {
-  if (fs.existsSync(path.join(root, cfg.sourceDir))) return false
-  const native = detectTargets(root).some((r) => r.repo.length)
-  const shared = ['CLAUDE.md', 'AGENTS.md', '.mcp.json'].some((f) => fs.existsSync(path.join(root, f)))
-  if (native || shared) return false
-  console.log(bold('nothing to import here — no agent config found'))
+// F4: nothing to import and no source dir means there is nothing for sync to
+// do — say so instead of falling through to "source dir not found", which
+// blames the user for a repo state sync is supposed to handle.
+//
+// The test is a property of the PLAN, never of the filesystem. An earlier
+// version asked "does a native config dir exist", which a `.claude/` holding
+// only a README answers yes to — the exact state a repo is in right after
+// `uninstall` — so --dry-run printed a plan and told the user to apply it,
+// and the apply then died on the missing source dir. Plan-driven, both paths
+// reach the same verdict by construction.
+const importsNothing = (plan) => !(plan.imports ?? []).length
+
+function printNothingToImport(root, cfg, plan) {
+  const seen = detectTargets(root).flatMap((r) => r.repo)
+  console.log(
+    bold(
+      seen.length
+        ? `nothing to import here — ${seen.join(', ')} holds no agent config meta-harness can read`
+        : 'nothing to import here — no agent config found'
+    )
+  )
+  const skipped = [...(plan.skipped ?? []), ...(plan.unsupported ?? []).filter((u) => u.skipped)]
+  if (skipped.length)
+    console.log(dim(`  (${skipped.map((s) => s.path ?? s.name).join(', ')} — not a definition, left in place)`))
   console.log(
     `\nStarting fresh?\n` +
       `  meta-harness init${dim('        scaffold ' + cfg.sourceDir + '/ with commented examples, install the agent skills')}\n` +
       `  ${dim('…or ask your coding agent: "build my harness"')}\n\n` +
       dim(`Already have a setup in another checkout? run sync there — this is a project-scoped tool.`)
   )
-  return true
 }
 
 program
@@ -297,8 +318,25 @@ program
     }
     const syncOpts = { targets: opts.targets ?? null, prefer: opts.prefer ?? null }
     const cfg = loadConfig(root)
-    if (!opts.json && nothingToImport(root, cfg, bold, dim)) return
     try {
+      // Only a bootstrap (no source dir yet) can reach the empty-plan state;
+      // in reconcile the source dir exists and generate always has something
+      // to compile. Costs one extra read-only plan on that path alone.
+      if (!fs.existsSync(path.join(root, cfg.sourceDir))) {
+        const plan = syncPlan(root, syncOpts)
+        if (importsNothing(plan)) {
+          if (opts.json)
+            console.log(
+              JSON.stringify(
+                opts.dryRun ? planForJson(plan) : { written: [], pruned: [], warnings: plan.warnings ?? [], plan: planForJson(plan) },
+                null,
+                2
+              )
+            )
+          else printNothingToImport(root, cfg, plan)
+          return
+        }
+      }
       if (opts.dryRun) {
         const plan = syncPlan(root, syncOpts)
         if (opts.json) console.log(JSON.stringify(planForJson(plan), null, 2))
@@ -306,7 +344,9 @@ program
           if (plan.mode === 'bootstrap') bootstrapBanner(plan, cfg, bold, dim)
           console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
           const emitted = realTargets(plan.generates)
-          printWarnings(plan.warnings, emitted, yellow)
+          // No next: block on a preview, so the trust warnings it would have
+          // replaced still have to be said.
+          printWarnings(plan.warnings, [], yellow)
           printProposed(root, emitted, plan.proposed, dim)
           if (plan.conflicts?.length) syncStopped(plan.conflicts, plan.unsupported ?? [], cfg.sourceDir)
           else console.log(dim('\nnothing written (--dry-run) — run `meta-harness sync` to apply this plan'))
@@ -319,9 +359,12 @@ program
           if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, cfg, bold, dim)
           console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }, opts.prefer))
           const emitted = realTargets(res.plan?.generates)
-          printWarnings(res.warnings, emitted, yellow)
-          printProposed(root, emitted, res.plan?.proposed, dim)
           const written = res.written ?? []
+          // The next: block only prints on a first run; only then may the
+          // warnings it restates be suppressed.
+          const showNext = res.plan?.mode === 'bootstrap' && written.length > 0
+          printWarnings(res.warnings, showNext ? emitted : [], yellow)
+          printProposed(root, emitted, res.plan?.proposed, dim)
           console.log(
             `${green('✔')} synced — ${written.length} file${written.length === 1 ? '' : 's'} written` +
               ((res.pruned ?? []).length ? ` · ${res.pruned.length} pruned` : '')
@@ -338,7 +381,7 @@ program
           }
           // Trust prompts are a first-run story. Repeating them on every routine
           // sync trains people to skim the block that matters once.
-          if (res.plan?.mode === 'bootstrap' && written.length) printNext(emitted, { bold, dim })
+          if (showNext) printNext(emitted, (res.plan?.generates ?? []).map((g) => (typeof g === 'string' ? g : (g.path ?? ''))), { bold, dim })
         }
       }
     } catch (e) {
