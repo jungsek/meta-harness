@@ -1,8 +1,11 @@
 // Palette validator — the design-stack rule is that palettes are validated by
 // computation, never eyeballed. Reads the OKLCH tokens declared below (they
-// mirror src/styles/tokens.css) and asserts:
-//   1. WCAG 2.2 contrast for every text-on-surface pair we actually ship
-//   2. impeccable's numeric palette rules (ink>=7:1, primary chroma, etc.)
+// mirror src/styles/tokens.css — v2 DARK terminal-native theme, DESIGN.md
+// "Register + theme") and asserts:
+//   1. DESIGN.md v2 contrast floor: ink >= 12:1 on bg; muted >= 4.5:1 on
+//      panel AND raised; accent carries TEXT at >= 4.5:1 on bg and panel
+//   2. every status color >= 4.5:1 on bg, panel, AND its own opaque pill
+//      ground; chroma floor 0.11 on the five chromatic statuses
 //   3. CVD safety: every pair of status colors stays distinguishable under
 //      protanopia / deuteranopia / tritanopia, by OKLab dE, not by eye
 // Run: node dashboard/scripts/validate-palette.mjs
@@ -12,11 +15,8 @@
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x))
 
-// OKLCH -> OKLab -> linear sRGB (Björn Ottosson's matrices)
-function oklchToLinearRgb(L, C, hDeg) {
-  const h = (hDeg * Math.PI) / 180
-  const a = C * Math.cos(h)
-  const b = C * Math.sin(h)
+// OKLab -> linear sRGB (Björn Ottosson's matrices)
+function oklabToLinearRgb(L, a, b) {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b
   const s_ = L - 0.0894841775 * a - 1.291485548 * b
@@ -28,6 +28,10 @@ function oklchToLinearRgb(L, C, hDeg) {
     -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
     -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
   ]
+}
+const oklchToLinearRgb = (L, C, hDeg) => {
+  const h = (hDeg * Math.PI) / 180
+  return oklabToLinearRgb(L, C * Math.cos(h), C * Math.sin(h))
 }
 
 function linearRgbToOklab([r, g, b]) {
@@ -47,6 +51,8 @@ const hex = (lin) =>
   lin
     .map((c) => Math.round(clamp01(encode(c)) * 255).toString(16).padStart(2, '0'))
     .join('')
+// hex() clamps; out-of-gamut would ship a silently different color.
+const inGamut = (lin) => lin.every((c) => c >= -1e-4 && c <= 1 + 1e-4)
 
 // WCAG 2.x relative luminance wants linear-light sRGB, which is what we have.
 const luminance = ([r, g, b]) => 0.2126 * clamp01(r) + 0.7152 * clamp01(g) + 0.0722 * clamp01(b)
@@ -82,39 +88,55 @@ const deltaE = (a, b) => {
   return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2])
 }
 
-// ---------- the palette under test ----------
+// ---------- the palette under test (v2 dark) ----------
 
 const oklch = (L, C, h) => ({ L, C, h, lin: oklchToLinearRgb(L, C, h), css: `oklch(${L} ${C} ${h})` })
 
 const T = {
-  bg: oklch(1, 0, 0),
-  surface: oklch(0.976, 0.006, 278),
-  raised: oklch(0.952, 0.008, 278),
-  line: oklch(0.9, 0.008, 278),
-  ink: oklch(0.19, 0.016, 278),
-  muted: oklch(0.48, 0.014, 278),
-  primary: oklch(0.42, 0.135, 278),
-  accent: oklch(0.66, 0.128, 205),
-  // --accent is a FILL and focus-ring color: at L 0.66 it cannot carry small
-  // text on any of our light grounds (2.51:1 on --raised, measured on the
-  // rendered page). Accent-colored TEXT uses this darker step instead.
-  accentStrong: oklch(0.46, 0.1, 205),
+  bg: oklch(0.155, 0.014, 278),
+  panel: oklch(0.19, 0.016, 278),
+  raised: oklch(0.23, 0.018, 278),
+  line: oklch(0.34, 0.02, 278),
+  lineStrong: oklch(0.46, 0.02, 278),
+  ink: oklch(0.93, 0.008, 278),
+  muted: oklch(0.72, 0.012, 278),
+  // On dark, one accent step carries text AND fills (10.2:1 on --bg); the
+  // v1 accent/accent-strong split is gone.
+  accent: oklch(0.78, 0.11, 205),
 }
 
 // Status vocabulary. Every one of these also ships a distinct glyph and a
 // distinct fill/stroke treatment — color is never the only channel (WCAG 1.4.1).
 // These six values are not eyeballed. They came out of a constrained search
-// (scripts/README notes the method) that maximised the worst-case OKLab
-// distance between every pair under all three dichromacies, subject to
-// >=4.5:1 on both --bg and --raised and a chroma floor of 0.11 so each one
+// that maximised the worst-case OKLab distance between every pair under all
+// three dichromacies, subject to >=4.5:1 on --bg, --panel and the pill ground,
+// L in DESIGN.md's 0.68-0.80 band, and a chroma floor of 0.11 so each one
 // still reads as its semantic hue. Nudge one and re-run this file.
 const STATUS = {
-  clean: oklch(0.52, 0.15, 140),
-  pending: oklch(0.54, 0.19, 260),
-  new: oklch(0.34, 0.17, 288),
-  changed: oklch(0.44, 0.13, 62),
-  conflict: oklch(0.36, 0.13, 22),
-  missing: oklch(0.5, 0.008, 278),
+  clean: oklch(0.79, 0.11, 150),
+  pending: oklch(0.77, 0.13, 233),
+  new: oklch(0.69, 0.17, 308),
+  changed: oklch(0.8, 0.16, 78),
+  conflict: oklch(0.68, 0.13, 35),
+  missing: oklch(0.71, 0.016, 278),
+}
+const CHROMATIC = ['clean', 'pending', 'new', 'changed', 'conflict']
+
+// Pill grounds are OPAQUE: tokens.css uses
+// `color-mix(in oklab, <status> 14%, <--panel>)`, and oklab interpolation is
+// NOT linear-sRGB interpolation — modelling it as the latter over-predicted
+// contrast by ~0.3 on the v1 light theme and shipped a ground that measured
+// 4.30:1 on the page. So mix in OKLab coordinates, exactly as the browser does.
+const toLab = (c) => {
+  const h = (c.h * Math.PI) / 180
+  return [c.L, c.C * Math.cos(h), c.C * Math.sin(h)]
+}
+const SOFT_MIX = 0.14
+const mixOverPanel = (c, n = SOFT_MIX) => {
+  const A = toLab(c)
+  const B = toLab(T.panel)
+  const m = A.map((v, i) => n * v + (1 - n) * B[i])
+  return { lin: oklabToLinearRgb(...m) }
 }
 
 // ---------- assertions ----------
@@ -123,78 +145,62 @@ const results = []
 const check = (name, pass, detail) => results.push({ name, pass, detail })
 const r2 = (n) => Math.round(n * 100) / 100
 
-// 1. impeccable numeric rules
-check('ink vs bg >= 7:1', contrast(T.ink.lin, T.bg.lin) >= 7, `${r2(contrast(T.ink.lin, T.bg.lin))}:1`)
-check('muted vs bg >= 3.5:1', contrast(T.muted.lin, T.bg.lin) >= 3.5, `${r2(contrast(T.muted.lin, T.bg.lin))}:1`)
-check('primary chroma <= 0.23', T.primary.C <= 0.23, `C=${T.primary.C}`)
-check(
-  'primary L>0.78 => chroma <= 0.18',
-  T.primary.L <= 0.78 || T.primary.C <= 0.18,
-  `L=${T.primary.L} C=${T.primary.C}`
-)
-check(
-  'primary vs accent >= 1.7',
-  contrast(T.primary.lin, T.accent.lin) >= 1.7,
-  `${r2(contrast(T.primary.lin, T.accent.lin))}:1`
-)
-check(
-  'accent can hold text on a fill',
-  T.accent.C >= 0.1 || T.accent.L >= 0.85 || T.accent.L <= 0.3,
-  `L=${T.accent.L} C=${T.accent.C}`
-)
+// 0. every shipped value is a real sRGB color (hex fallbacks must be honest)
+{
+  const all = [
+    ...Object.values(T).map((c) => c.lin),
+    ...Object.values(STATUS).map((c) => c.lin),
+    ...Object.values(STATUS).map((c) => mixOverPanel(c).lin),
+  ]
+  check('all tokens inside sRGB gamut', all.every(inGamut), `${all.length} colors`)
+}
 
-// 2. text pairs we actually ship
-const bodyPairs = [
-  ['ink on bg', T.ink, T.bg],
-  ['ink on surface', T.ink, T.surface],
-  ['ink on raised', T.ink, T.raised],
-  ['muted on bg', T.muted, T.bg],
-  ['muted on surface', T.muted, T.surface],
-  ['muted on raised', T.muted, T.raised],
-  ['primary on bg', T.primary, T.bg],
-  ['primary on surface', T.primary, T.surface],
-  // The diff-pane header sits on --raised; its two tone labels must both pass
-  // there. `native` uses --status-changed, already covered below.
-  ['accentStrong on bg', T.accentStrong, T.bg],
-  ['accentStrong on surface', T.accentStrong, T.surface],
-  ['accentStrong on raised', T.accentStrong, T.raised],
-]
-for (const [name, fg, bg] of bodyPairs)
-  check(`body text ${name} >= 4.5:1`, contrast(fg.lin, bg.lin) >= 4.5, `${r2(contrast(fg.lin, bg.lin))}:1`)
+// 1. DESIGN.md v2 contrast floor
+check('ink on bg >= 12:1', contrast(T.ink.lin, T.bg.lin) >= 12, `${r2(contrast(T.ink.lin, T.bg.lin))}:1`)
+check(
+  'muted on panel >= 4.5:1',
+  contrast(T.muted.lin, T.panel.lin) >= 4.5,
+  `${r2(contrast(T.muted.lin, T.panel.lin))}:1`
+)
+check(
+  'muted on raised >= 4.5:1',
+  contrast(T.muted.lin, T.raised.lin) >= 4.5,
+  `${r2(contrast(T.muted.lin, T.raised.lin))}:1`
+)
+check(
+  'accent text on bg >= 4.5:1',
+  contrast(T.accent.lin, T.bg.lin) >= 4.5,
+  `${r2(contrast(T.accent.lin, T.bg.lin))}:1`
+)
+check(
+  'accent text on panel >= 4.5:1',
+  contrast(T.accent.lin, T.panel.lin) >= 4.5,
+  `${r2(contrast(T.accent.lin, T.panel.lin))}:1`
+)
+check('accent stays phosphor-calm (C <= 0.12)', T.accent.C <= 0.12, `C=${T.accent.C}`)
 
-// Status pills are a tinted surface + the status color as TEXT (the GitHub /
-// Linear shape), never a saturated fill with white text. So the requirement is
-// small-text contrast, 4.5:1, against both surfaces a pill can sit on.
+// 2. Status pills are a tinted surface + the status color as TEXT (the GitHub /
+// Linear shape), never a saturated fill. Small-text contrast, 4.5:1, against
+// every ground a status can sit on — including its own opaque pill ground, the
+// pair that proved alpha grounds were a real failure on the light theme.
 for (const [k, c] of Object.entries(STATUS)) {
   check(`status "${k}" text on bg >= 4.5:1`, contrast(c.lin, T.bg.lin) >= 4.5, `${r2(contrast(c.lin, T.bg.lin))}:1`)
   check(
-    `status "${k}" text on raised >= 4.5:1`,
-    contrast(c.lin, T.raised.lin) >= 4.5,
-    `${r2(contrast(c.lin, T.raised.lin))}:1`
+    `status "${k}" text on panel >= 4.5:1`,
+    contrast(c.lin, T.panel.lin) >= 4.5,
+    `${r2(contrast(c.lin, T.panel.lin))}:1`
   )
-}
-
-// 2b. Status pills sit on their own tinted ground. That ground MUST be opaque:
-// as an alpha it composited over whatever the row happened to be (expanded
-// rows carry `bg-raised/60`), which measured 4.21:1 on the rendered page — a
-// real failure that no static check catches. Opaque means the pill's contrast
-// is the same everywhere, and this is the pair that proves it.
-// Must model what the browser actually does. tokens.css uses
-// `color-mix(in oklab, <status> N%, white)`, and oklab interpolation is NOT
-// linear-sRGB interpolation — modelling it as the latter over-predicted
-// contrast by ~0.3 and shipped a ground that measured 4.30:1 on the page.
-// White in oklab is (1, 0, 0), so mixing toward it is just:
-//   L' = n*L + (1-n)   ·   C' = n*C   ·   h unchanged
-const mixOverWhite = (c, n) => oklch(n * c.L + (1 - n), n * c.C, c.h)
-const SOFT_MIX = 0.1
-for (const [k, c] of Object.entries(STATUS)) {
-  const ground = mixOverWhite(c, SOFT_MIX)
+  const ground = mixOverPanel(c)
   check(
     `status "${k}" on its opaque pill ground >= 4.5:1`,
     contrast(c.lin, ground.lin) >= 4.5,
     `${r2(contrast(c.lin, ground.lin))}:1`
   )
 }
+for (const k of CHROMATIC)
+  check(`status "${k}" chroma >= 0.11`, STATUS[k].C >= 0.11, `C=${STATUS[k].C}`)
+for (const [k, c] of Object.entries(STATUS))
+  check(`status "${k}" L in 0.68-0.80`, c.L >= 0.68 && c.L <= 0.8, `L=${c.L}`)
 
 // 3. CVD separation across every status pair, in every dichromacy.
 // 0.07 in OKLab is comfortably past a just-noticeable difference for the pill-
@@ -214,9 +220,13 @@ for (const kind of Object.keys(CVD)) {
 // ---------- report ----------
 
 console.log('\nTOKENS')
-for (const [k, v] of Object.entries(T)) console.log(`  --${k.padEnd(9)} ${v.css.padEnd(26)} ${hex(v.lin)}`)
+for (const [k, v] of Object.entries(T)) console.log(`  --${k.padEnd(10)} ${v.css.padEnd(26)} ${hex(v.lin)}`)
 console.log('\nSTATUS')
-for (const [k, v] of Object.entries(STATUS)) console.log(`  --status-${k.padEnd(9)} ${v.css.padEnd(26)} ${hex(v.lin)}`)
+for (const [k, v] of Object.entries(STATUS)) {
+  console.log(
+    `  --status-${k.padEnd(9)} ${v.css.padEnd(26)} ${hex(v.lin)}   pill ground ${hex(mixOverPanel(v).lin)}`
+  )
+}
 
 console.log('\nCHECKS')
 let failed = 0

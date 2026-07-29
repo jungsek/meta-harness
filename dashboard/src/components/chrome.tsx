@@ -53,7 +53,7 @@ export function StatusPill({
 
 const BUTTON_VARIANTS = {
   primary:
-    'bg-primary text-primary-ink hover:bg-primary/90 active:bg-primary/80 disabled:bg-primary/40 disabled:text-primary-ink',
+    'bg-accent text-bg hover:bg-accent/90 active:bg-accent/80 disabled:bg-accent/40 disabled:text-bg',
   secondary: 'border border-line bg-bg text-ink hover:bg-raised active:bg-line/60',
   quiet: 'text-muted hover:bg-raised hover:text-ink active:bg-line/60',
 } as const
@@ -459,7 +459,7 @@ function DiffColumn({
         <span
           className={cn(
             'font-mono text-micro font-medium',
-            tone === 'source' ? 'text-accent-strong' : 'text-status-changed'
+            tone === 'source' ? 'text-accent' : 'text-status-changed'
           )}
         >
           {title}

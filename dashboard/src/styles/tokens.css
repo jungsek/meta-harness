@@ -1,58 +1,110 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Design tokens — the machine-readable half of ../../DESIGN.md.
-   Every color below is produced and gated by
-   `node dashboard/scripts/validate-palette.mjs` (38/38). Do not hand-edit a
+   Design tokens — the machine-readable half of ../../DESIGN.md (v2 dark,
+   "Register + theme"). Every color below is produced and gated by
+   `node dashboard/scripts/validate-palette.mjs` (39/39). Do not hand-edit a
    value without re-running it; the status six additionally carry a computed
-   worst-case CVD separation of dE 0.09 across all three dichromacies.
+   worst-case CVD separation of dE 0.11 across all three dichromacies.
 --------------------------------------------------------------------------- */
 
-@theme {
-  /* Surfaces + ink. Neutrals are tinted toward the brand's own 278deg hue,
-     never toward generic warmth. --bg is literally white on purpose. */
-  --color-bg: oklch(1 0 0);
-  --color-surface: oklch(0.976 0.006 278);
-  --color-raised: oklch(0.952 0.008 278);
-  --color-line: oklch(0.9 0.008 278);
-  --color-ink: oklch(0.19 0.016 278);
-  --color-muted: oklch(0.48 0.014 278);
+/* Palette lives on :root as hex fallback + OKLCH override (same computed
+   color — the hex values come out of validate-palette.mjs, not an eyedropper).
+   Semantic z-scale rides along. Never an arbitrary 999. */
+:root {
+  /* Grounds — near-black with the brand's 278deg ink-violet cast. */
+  --bg: #0b0c12;
+  --bg: oklch(0.155 0.014 278);
+  --panel: #12131b;
+  --panel: oklch(0.19 0.016 278);
+  --raised: #1b1c25;
+  --raised: oklch(0.23 0.018 278);
+  --line: #353742;
+  --line: oklch(0.34 0.02 278);
+  --line-strong: #555763;
+  --line-strong: oklch(0.46 0.02 278);
 
-  --color-primary: oklch(0.42 0.135 278);
-  --color-primary-ink: oklch(1 0 0);
-  --color-primary-soft: oklch(0.42 0.135 278 / 0.08);
-  --color-accent: oklch(0.66 0.128 205);
-  --color-accent-ink: oklch(1 0 0);
-  --color-accent-soft: oklch(0.66 0.128 205 / 0.12);
-  /* --accent is a fill and focus-ring color; at L 0.66 it cannot carry small
-     text on any light ground (2.51:1 on --raised, measured on the rendered
-     page). Accent-colored TEXT uses this step. Both are gated by
-     scripts/validate-palette.mjs. */
-  --color-accent-strong: oklch(0.46 0.1 205);
+  /* Ink. 15.9:1 on --bg; muted holds 4.5:1+ on panel AND raised. */
+  --ink: #e6e7ed;
+  --ink: oklch(0.93 0.008 278);
+  --muted: #a3a4ac;
+  --muted: oklch(0.72 0.012 278);
+
+  /* Accent teal — prompt glyph, live dot, focus ring, links. On dark one
+     step carries text AND fills (10.2:1 on --bg); chroma capped at 0.11 so
+     it reads phosphor-calm, not neon. */
+  --accent: #4fccd9;
+  --accent: oklch(0.78 0.11 205);
+  --accent-soft: color-mix(in oklab, oklch(0.78 0.11 205) 14%, oklch(0.155 0.014 278));
 
   /* Status vocabulary. Always rendered as color + glyph + word. */
-  --color-status-clean: oklch(0.52 0.15 140);
-  --color-status-pending: oklch(0.54 0.19 260);
-  --color-status-new: oklch(0.34 0.17 288);
-  --color-status-changed: oklch(0.44 0.13 62);
-  --color-status-conflict: oklch(0.36 0.13 22);
-  --color-status-missing: oklch(0.5 0.008 278);
+  --status-clean: #85cf95;
+  --status-clean: oklch(0.79 0.11 150);
+  --status-pending: #4ec2f9;
+  --status-pending: oklch(0.77 0.13 233);
+  --status-new: #b97aeb;
+  --status-new: oklch(0.69 0.17 308);
+  --status-changed: #f5af20;
+  --status-changed: oklch(0.8 0.16 78);
+  --status-conflict: #dc785f;
+  --status-conflict: oklch(0.68 0.13 35);
+  --status-missing: #9fa1ac;
+  --status-missing: oklch(0.71 0.016 278);
 
-  /* Pill grounds are OPAQUE, not alpha. As an alpha the ground composited over
-     whatever the row happened to be — an expanded row carries `bg-raised/60`,
-     which measured 4.21:1 on the rendered page and failed AA. Opaque makes a
-     pill's contrast identical everywhere it appears; validate-palette.mjs
-     gates this exact pair at 10%. */
-  --color-status-clean-soft: color-mix(in oklab, oklch(0.52 0.15 140) 10%, white);
-  --color-status-pending-soft: color-mix(in oklab, oklch(0.54 0.19 260) 10%, white);
-  --color-status-new-soft: color-mix(in oklab, oklch(0.34 0.17 288) 10%, white);
-  --color-status-changed-soft: color-mix(in oklab, oklch(0.44 0.13 62) 10%, white);
-  --color-status-conflict-soft: color-mix(in oklab, oklch(0.36 0.13 22) 10%, white);
-  --color-status-missing-soft: color-mix(in oklab, oklch(0.5 0.008 278) 10%, white);
+  /* Pill grounds are OPAQUE, not alpha. As an alpha the ground composited
+     over whatever the row happened to be, which failed AA on the rendered v1
+     page. Opaque makes a pill's contrast identical everywhere it appears;
+     validate-palette.mjs gates this exact pair at 14% over --panel. */
+  --status-clean-soft: #20292b;
+  --status-clean-soft: color-mix(in oklab, oklch(0.79 0.11 150) 14%, oklch(0.19 0.016 278));
+  --status-pending-soft: #1c2835;
+  --status-pending-soft: color-mix(in oklab, oklch(0.77 0.13 233) 14%, oklch(0.19 0.016 278));
+  --status-new-soft: #262034;
+  --status-new-soft: color-mix(in oklab, oklch(0.69 0.17 308) 14%, oklch(0.19 0.016 278));
+  --status-changed-soft: #2c2623;
+  --status-changed-soft: color-mix(in oklab, oklch(0.8 0.16 78) 14%, oklch(0.19 0.016 278));
+  --status-conflict-soft: #2a2025;
+  --status-conflict-soft: color-mix(in oklab, oklch(0.68 0.13 35) 14%, oklch(0.19 0.016 278));
+  --status-missing-soft: #23242d;
+  --status-missing-soft: color-mix(in oklab, oklch(0.71 0.016 278) 14%, oklch(0.19 0.016 278));
 
-  /* Type — one family, fixed rem scale at ~1.15. No clamp() in product UI. */
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-backdrop: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+}
+
+/* Tailwind reads the same :root custom properties — one source of values. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-status-clean: var(--status-clean);
+  --color-status-pending: var(--status-pending);
+  --color-status-new: var(--status-new);
+  --color-status-changed: var(--status-changed);
+  --color-status-conflict: var(--status-conflict);
+  --color-status-missing: var(--status-missing);
+  --color-status-clean-soft: var(--status-clean-soft);
+  --color-status-pending-soft: var(--status-pending-soft);
+  --color-status-new-soft: var(--status-new-soft);
+  --color-status-changed-soft: var(--status-changed-soft);
+  --color-status-conflict-soft: var(--status-conflict-soft);
+  --color-status-missing-soft: var(--status-missing-soft);
+}
+
+@theme {
+  /* Type — mono-forward pairing per DESIGN.md v2. */
   --font-sans: 'Inter var', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --text-display: 1.75rem;
   --text-display--line-height: 1.2;
@@ -75,22 +127,10 @@
   --radius-control: 6px;
   --radius-panel: 10px;
 
-  --shadow-panel: 0 1px 2px oklch(0.19 0.016 278 / 0.06);
-
   /* Motion — 150-200ms, ease-out-quart. State only, never decoration. */
   --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-fast: 150ms;
   --duration-base: 200ms;
-}
-
-/* Semantic z-scale. Never an arbitrary 999. */
-:root {
-  --z-dropdown: 10;
-  --z-sticky: 20;
-  --z-backdrop: 30;
-  --z-modal: 40;
-  --z-toast: 50;
-  --z-tooltip: 60;
 }
 
 @layer base {
