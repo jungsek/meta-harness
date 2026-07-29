@@ -9,6 +9,7 @@ import type { LaneArrow, SyncMapModel, TargetFile, TargetPanel } from '@/lib/der
 import { selectionTitle, type Selection } from '@/map/selection'
 import { Dialog, DialogPanel, ScrollPane } from '@/components/ui'
 import { DiffPane, JsonBlock, KeyValue, Mono, StatusPill } from '@/components/chrome'
+import { DiffView } from '@/map/DiffView'
 import { cn } from '@/lib/util'
 
 /* -------------------------------------------------------------------------- */
@@ -118,7 +119,7 @@ function SourceItemBody({ snap, model, category, name }: { snap: Snapshot; model
   )
 }
 
-function FileBody({ target, file }: { target: string; file: TargetFile }) {
+function FileBody({ target, file, root }: { target: string; file: TargetFile; root: string | null }) {
   return (
     <div className="space-y-4">
       <KeyValue
@@ -142,6 +143,9 @@ function FileBody({ target, file }: { target: string; file: TargetFile }) {
       ) : (
         <p className="text-body text-muted">Matches the manifest — nothing to do.</p>
       )}
+      {file.state === 'changed' || file.state === 'missing' || file.drifted ? (
+        <DiffView path={file.path} root={root} />
+      ) : null}
     </div>
   )
 }
@@ -280,7 +284,7 @@ export function Drawer({
           {selection.type === 'sourceItem' ? (
             <SourceItemBody snap={snapshot} model={model} category={selection.category} name={selection.name} />
           ) : selection.type === 'file' ? (
-            <FileBody target={selection.target} file={selection.file} />
+            <FileBody target={selection.target} file={selection.file} root={snapshot.root} />
           ) : selection.type === 'arrow' ? (
             <ArrowBody arrow={selection.arrow} />
           ) : selection.type === 'conflict' ? (

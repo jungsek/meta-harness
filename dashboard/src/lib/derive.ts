@@ -66,6 +66,8 @@ export interface TargetFile {
   /** Raw file state word shown in the pill (`link` keeps its own word). */
   word: string
   category: string | null
+  /** True when generate --check reports this output stale/hand-edited — the file has a real content diff to show. */
+  drifted: boolean
 }
 
 export interface TargetPanel {
@@ -245,16 +247,18 @@ function buildLanes(
   return { lanes, sharedGenerates, sharedConflicts }
 }
 
-function toTargetFile(row: StatusRow): TargetFile {
+function toTargetFile(row: StatusRow, drifted: Set<string>): TargetFile {
   return {
     path: row.path,
     state: FILE_STATE_TO_KIND[row.state] ?? 'missing',
     word: row.state === 'link' ? 'link' : (FILE_STATE_TO_KIND[row.state] ?? 'missing'),
     category: row.category,
+    drifted: drifted.has(row.path),
   }
 }
 
 function buildPanels(snap: Snapshot): { panels: TargetPanel[]; ghosts: TargetPanel[]; sharedFiles: TargetFile[] } {
+  const drifted = new Set(snap.drift.drifted)
   const byTarget = new Map<string, StatusRow[]>()
   for (const row of snap.status) {
     const t = row.target ?? 'shared'
@@ -267,7 +271,7 @@ function buildPanels(snap: Snapshot): { panels: TargetPanel[]; ghosts: TargetPan
     const rows = byTarget.get(det.target) ?? []
     const groups = new Map<string, TargetFile[]>()
     for (const row of rows) {
-      const file = toTargetFile(row)
+      const file = toTargetFile(row, drifted)
       const key = row.category ?? 'other'
       const list = groups.get(key) ?? []
       list.push(file)
@@ -290,7 +294,7 @@ function buildPanels(snap: Snapshot): { panels: TargetPanel[]; ghosts: TargetPan
 
   const panels = snap.detection.filter((d) => d.enabled).map(toPanel)
   const ghosts = snap.detection.filter((d) => !d.enabled && (d.proposed || d.repo.length > 0 || d.bin)).map(toPanel)
-  const sharedFiles = (byTarget.get('shared') ?? []).map(toTargetFile)
+  const sharedFiles = (byTarget.get('shared') ?? []).map((row) => toTargetFile(row, drifted))
   return { panels, ghosts, sharedFiles }
 }
 

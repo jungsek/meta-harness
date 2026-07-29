@@ -10,6 +10,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { getReference, getRoots, getSnapshot, getStatusPoll, validateRoot } from './collect.mjs'
+import { computeDiff } from './diff.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dashboardDir = path.join(__dirname, '..')
@@ -102,6 +103,15 @@ const server = createServer((req, res) => {
       const root = rootFromQuery(url.searchParams)
       validateRoot(root)
       return sendJson(res, 200, getStatusPoll(root))
+    }
+    if (pathname === '/api/diff') {
+      const root = rootFromQuery(url.searchParams)
+      validateRoot(root)
+      const rel = url.searchParams.get('path')
+      if (!rel) return sendError(res, 400, 'path query parameter is required')
+      const diff = computeDiff(root, rel) // read-only — recomputes expected bytes, never writes
+      if (diff.error) return sendJson(res, 404, diff)
+      return sendJson(res, 200, diff)
     }
     if (pathname === '/api/reference') return sendJson(res, 200, getReference())
     if (pathname === '/api/roots') return sendJson(res, 200, getRoots(DEFAULT_ROOT, dashboardDir))

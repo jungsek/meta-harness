@@ -4,12 +4,13 @@
  * Imports flow inward, generates flow outward, conflicts sit in the lane.
  * All interpretation happens in lib/derive.ts; this file only draws.
  */
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Mono, StatusPill } from '@/components/chrome'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Tooltip } from '@/components/ui'
 import type { Lane, LaneArrow, SourceCategory, SyncMapModel, TargetPanel } from '@/lib/derive'
 import { useMediaQuery } from '@/lib/hooks'
 import { cn, plural, resolve } from '@/lib/util'
+import { BrandTitle, brandOf } from '@/map/brand'
 import type { Selection } from '@/map/selection'
 
 const ARROW_CAP = 9
@@ -183,13 +184,28 @@ function LaneCol({
 
 /* --------------------------------------------------------- source column */
 
-function SourceCategoryRow({ cat, onSelect }: { cat: SourceCategory } & SelectProps) {
+function SourceCategoryRow({
+  cat,
+  onSelect,
+  onTrace,
+}: { cat: SourceCategory; onTrace?: (cat: string | null) => void } & SelectProps) {
   const [open, setOpen] = useState(false)
   const id = useId()
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        onTrace?.(next ? cat.category : null)
+      }}
+    >
       <CollapsibleTrigger
         aria-controls={id}
+        data-conn={cat.category}
+        onMouseEnter={() => onTrace?.(cat.category)}
+        onMouseLeave={() => !open && onTrace?.(null)}
+        onFocus={() => onTrace?.(cat.category)}
+        onBlur={() => !open && onTrace?.(null)}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-[4px] px-2 py-1.5',
           'hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
@@ -285,10 +301,14 @@ function SharedStrip({ model, onSelect }: { model: SyncMapModel } & SelectProps)
   )
 }
 
-function SourceColumn({ model, onSelect }: { model: SyncMapModel } & SelectProps) {
+function SourceColumn({
+  model,
+  onSelect,
+  onTrace,
+}: { model: SyncMapModel; onTrace?: (cat: string | null) => void } & SelectProps) {
   const { source } = model
   return (
-    <Frame title={`meta-harness · ${source.dir}`} variant="source" className="p-4 pt-5">
+    <Frame title={<BrandTitle target="source" suffix={source.dir} />} variant="source" className="p-4 pt-5">
       <p className="mb-2 px-2 text-label text-muted">
         source of truth · {plural(source.total, 'item')}
       </p>
@@ -296,7 +316,7 @@ function SourceColumn({ model, onSelect }: { model: SyncMapModel } & SelectProps
         <>
           <div className="flex flex-col gap-0.5">
             {source.categories.map((cat) => (
-              <SourceCategoryRow key={cat.category} cat={cat} onSelect={onSelect} />
+              <SourceCategoryRow key={cat.category} cat={cat} onSelect={onSelect} onTrace={onTrace} />
             ))}
           </div>
           <SharedStrip model={model} onSelect={onSelect} />
@@ -319,9 +339,8 @@ function SourceColumn({ model, onSelect }: { model: SyncMapModel } & SelectProps
 /* --------------------------------------------------------- target panels */
 
 function TargetColumn({ panel, onSelect }: { panel: TargetPanel } & SelectProps) {
-  const title = panel.target === 'claude' ? 'claude code' : panel.target
   return (
-    <Frame title={title} className="p-3 pt-4">
+    <Frame title={<BrandTitle target={panel.target} />} className="p-3 pt-4">
       <p className="mb-2 px-1 text-label text-muted">
         native config · {plural(panel.fileCount, 'file')}
         {panel.attention > 0 && (
@@ -334,7 +353,10 @@ function TargetColumn({ panel, onSelect }: { panel: TargetPanel } & SelectProps)
         <div className="flex flex-col gap-2">
           {panel.groups.map((group) => (
             <div key={group.category}>
-              <Mono className="px-1 text-micro text-muted">{group.category}</Mono>
+              {/* plain span: Mono strips unknown props, and the connector overlay needs this data attribute in the DOM */}
+              <span data-conn-target={`${panel.target}:${group.category}`} className="block px-1 font-mono text-micro text-muted">
+                {group.category}
+              </span>
               <ul>
                 {group.files.map((file) => (
                   <li key={file.path}>
@@ -346,8 +368,17 @@ function TargetColumn({ panel, onSelect }: { panel: TargetPanel } & SelectProps)
                         'hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
                       )}
                     >
-                      <Mono className="truncate text-data text-ink">{file.path}</Mono>
-                      <StatusPill kind={file.state} label={file.word} explain={false} />
+                      <Mono className={cn('truncate text-data', file.drifted || file.state === 'missing' ? 'text-status-conflict' : 'text-ink')}>
+                        {file.path}
+                      </Mono>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        {file.drifted ? (
+                          <span className="rounded-[4px] bg-status-conflict-soft px-1.5 py-0.5 font-mono text-micro font-medium text-status-conflict">
+                            diff
+                          </span>
+                        ) : null}
+                        <StatusPill kind={file.state} label={file.word} explain={false} />
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -381,6 +412,81 @@ function GhostPanel({ panel, onSelect }: { panel: TargetPanel } & SelectProps) {
   )
 }
 
+/* ------------------------------------------------------------ connectors */
+
+interface Wire {
+  key: string
+  d: string
+  color: string
+}
+
+/**
+ * Category-mapping wires: hover (or expand) a source category and lines are
+ * drawn from that row to the same category group in each target panel, in the
+ * target's brand color. Pointer-events none; purely explanatory.
+ */
+function Connectors({ container, activeCat }: { container: React.RefObject<HTMLDivElement | null>; activeCat: string | null }) {
+  const [wires, setWires] = useState<Wire[]>([])
+  const [size, setSize] = useState({ w: 0, h: 0 })
+
+  useLayoutEffect(() => {
+    const el = container.current
+    if (!el || !activeCat) {
+      setWires([])
+      return
+    }
+    const compute = () => {
+      const base = el.getBoundingClientRect()
+      setSize({ w: base.width, h: base.height })
+      const from = el.querySelector<HTMLElement>(`[data-conn="${activeCat}"]`)
+      if (!from) {
+        setWires([])
+        return
+      }
+      const f = from.getBoundingClientRect()
+      const next: Wire[] = []
+      for (const to of el.querySelectorAll<HTMLElement>('[data-conn-target]')) {
+        const [target, cat] = (to.dataset.connTarget ?? '').split(':')
+        if (cat !== activeCat || !target) continue
+        const t = to.getBoundingClientRect()
+        const leftward = t.left < f.left
+        const x1 = (leftward ? f.left : f.right) - base.left
+        const y1 = f.top + f.height / 2 - base.top
+        const x2 = (leftward ? t.right : t.left) - base.left
+        const y2 = t.top + t.height / 2 - base.top
+        const dx = (x2 - x1) / 2
+        next.push({
+          key: `${target}:${cat}`,
+          d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
+          color: brandOf(target).color,
+        })
+      }
+      setWires(next)
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [container, activeCat])
+
+  if (wires.length === 0) return null
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[var(--z-dropdown)]"
+      width={size.w}
+      height={size.h}
+      fill="none"
+    >
+      {wires.map((w) => (
+        <g key={w.key} className="mh-fade">
+          <path d={w.d} stroke={w.color} strokeWidth="1.5" opacity="0.8" />
+          <circle cx={w.d.split(' ')[1]} cy={w.d.split(' ')[2]} r="2.5" fill={w.color} />
+        </g>
+      ))}
+    </svg>
+  )
+}
+
 /* ----------------------------------------------------------------- glyphs */
 
 const GLYPH_KEY: { kind: Parameters<typeof resolve>[0]; hint: string }[] = [
@@ -392,7 +498,7 @@ const GLYPH_KEY: { kind: Parameters<typeof resolve>[0]; hint: string }[] = [
   { kind: 'missing', hint: 'managed file absent' },
 ]
 
-function GlyphKey() {
+export function GlyphKey() {
   return (
     <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-micro text-muted">
       {GLYPH_KEY.map(({ kind, hint }) => {
@@ -422,6 +528,13 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
   // Overflow targets (3+ enabled) stack under the map rather than breaking it.
   const overflow = useMemo(() => rest ?? [], [rest])
 
+  // Category-trace wires (desktop only — the stacked layout has no gap to draw in).
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [activeCat, setActiveCat] = useState<string | null>(null)
+  useEffect(() => {
+    if (stacked) setActiveCat(null)
+  }, [stacked])
+
   if (stacked) {
     return (
       <div className="flex flex-col gap-2">
@@ -443,17 +556,17 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
             ))}
           </div>
         )}
-        <GlyphKey />
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-[1fr_56px_1.35fr_56px_1fr] items-start gap-0">
+      <div ref={containerRef} className="relative grid grid-cols-[1fr_56px_1.35fr_56px_1fr] items-start gap-0">
+        <Connectors container={containerRef} activeCat={activeCat} />
         {left ? <TargetColumn panel={left} onSelect={onSelect} /> : <div />}
         <LaneCol lane={laneFor(left?.target)} toward="right" vertical={false} onSelect={onSelect} />
-        <SourceColumn model={model} onSelect={onSelect} />
+        <SourceColumn model={model} onSelect={onSelect} onTrace={setActiveCat} />
         <LaneCol lane={laneFor(right?.target)} toward="left" vertical={false} onSelect={onSelect} />
         {right ? <TargetColumn panel={right} onSelect={onSelect} /> : <div />}
       </div>
@@ -474,7 +587,6 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
           ))}
         </div>
       )}
-      <GlyphKey />
     </div>
   )
 }

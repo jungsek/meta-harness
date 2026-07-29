@@ -15,9 +15,9 @@ import { useHashState, useNow, usePoll } from '@/lib/hooks'
 import { basename, cn, formatClock, formatElapsed, plural } from '@/lib/util'
 import { Button, Mono, Panel, StatusPill } from '@/components/chrome'
 import { Popover, PopoverPanel, PopoverTrigger, Tooltip, TooltipProvider } from '@/components/ui'
-import { SyncMap } from '@/map/SyncMap'
+import { GlyphKey, SyncMap } from '@/map/SyncMap'
 import { Drawer } from '@/map/Drawer'
-import { Console } from '@/map/Console'
+import { Insights } from '@/map/Insights'
 import { Help } from '@/map/Help'
 import type { Selection } from '@/map/selection'
 
@@ -149,10 +149,10 @@ export default function App() {
           {error ? <ErrorPanel error={error} root={currentRoot} /> : null}
           {loading ? <LoadingView /> : null}
           {!loading && model && snapshot ? (
-            <div className="flex flex-col gap-5">
-              <VerdictLine model={model} rescanning={rescanning} />
+            <div className="flex flex-col gap-4">
+              <GlyphKey />
+              <Insights model={model} rescanning={rescanning} />
               <SyncMap model={model} onSelect={setSelection} />
-              <Console lines={model.console} />
               <Drawer selection={selection} snapshot={snapshot} model={model} onClose={() => setSelection(null)} />
             </div>
           ) : null}
@@ -167,33 +167,6 @@ export default function App() {
         </main>
       </div>
     </TooltipProvider>
-  )
-}
-
-/**
- * The one sentence the product exists to say, rendered like the CLI would
- * say it: prompt caret, verdict, then the remedy as a real command.
- */
-function VerdictLine({ model, rescanning }: { model: ReturnType<typeof deriveSyncMap>; rescanning: boolean }) {
-  const { verdict } = model
-  const tone =
-    verdict.tone === 'ok'
-      ? 'text-status-clean'
-      : verdict.tone === 'conflict'
-        ? 'text-status-conflict'
-        : verdict.tone === 'error'
-          ? 'text-status-conflict'
-          : 'text-ink'
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span aria-hidden="true" className={cn('mh-caret font-mono text-verdict font-semibold', rescanning && 'mh-breathe')}>
-        ❯
-      </span>
-      <h1 className={cn('font-mono text-verdict font-semibold [text-wrap:balance]', tone)}>{verdict.text}</h1>
-      {verdict.command ? (
-        <Mono className="rounded-[4px] bg-raised px-2 py-1 text-data text-accent">{verdict.command}</Mono>
-      ) : null}
-    </div>
   )
 }
 

@@ -225,3 +225,7 @@ export interface ApiError {
   error: string
   detail?: string
 }
+
+export interface DiffRow { type: 'ctx'|'add'|'del'|'skip'; a?: number|null; b?: number|null; text?: string; count?: number }
+
+export interface FileDiff { path: string; kind: 'text'|'symlink'|'missing'|'binary'; identical: boolean; rows: DiffRow[]; expectedLabel: string; actualLabel: string }
