@@ -40,6 +40,11 @@ export function DiffView({ path, root }: { path: string; root: string | null }) 
 
   React.useEffect(() => {
     const ctrl = new AbortController()
+    // Abort cancels the fetch, but res.json() can still resolve after cleanup
+    // on a path/root switch — every set goes through this guard.
+    const set = (next: State) => {
+      if (!ctrl.signal.aborted) setState(next)
+    }
     setState({ phase: 'loading' })
     const url = `/api/diff?path=${encodeURIComponent(path)}${root ? `&root=${encodeURIComponent(root)}` : ''}`
     void (async () => {
@@ -47,20 +52,20 @@ export function DiffView({ path, root }: { path: string; root: string | null }) 
       try {
         res = await fetch(url, { headers: { accept: 'application/json' }, signal: ctrl.signal })
       } catch (err) {
-        if (!(err instanceof DOMException && err.name === 'AbortError')) setState({ phase: 'sample' })
+        if (!(err instanceof DOMException && err.name === 'AbortError')) set({ phase: 'sample' })
         return
       }
       // Same heuristic as lib/api.ts: 404 or HTML = the bridge is not up.
       const contentType = res.headers.get('content-type') ?? ''
       if (res.status === 404 || !contentType.includes('json')) {
-        setState({ phase: 'sample' })
+        set({ phase: 'sample' })
         return
       }
       let body: unknown
       try {
         body = await res.json()
       } catch {
-        setState({ phase: 'sample' })
+        set({ phase: 'sample' })
         return
       }
       if (!res.ok) {
@@ -68,10 +73,10 @@ export function DiffView({ path, root }: { path: string; root: string | null }) 
           typeof body === 'object' && body !== null && typeof (body as { error?: unknown }).error === 'string'
             ? (body as { error: string }).error
             : `HTTP ${res.status}`
-        setState({ phase: 'error', message })
+        set({ phase: 'error', message })
         return
       }
-      setState({ phase: 'ready', diff: body as FileDiff })
+      set({ phase: 'ready', diff: body as FileDiff })
     })()
     return () => ctrl.abort()
   }, [path, root])

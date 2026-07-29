@@ -13,8 +13,13 @@ const splitLines = (s) => {
   return lines
 }
 
-// Classic LCS DP — config files are small, O(n*m) is fine.
-// ponytail: quadratic diff, swap in Myers if files ever get big.
+// A managed output should never be near this; a file that is means someone
+// pointed the diff at something else — refuse rather than burn CPU/RAM.
+const MAX_DIFF_BYTES = 2 * 1024 * 1024
+const MAX_DIFF_LINES = 20_000
+
+// Classic LCS DP — config files are small, O(n*m) is fine under the caps.
+// ponytail: quadratic diff, swap in Myers if the caps ever chafe.
 function lineDiff(aLines, bLines) {
   const n = aLines.length
   const m = bLines.length
@@ -106,13 +111,28 @@ export function computeDiff(root, relPath) {
   let actual = ''
   let kind = 'text'
   try {
-    actual = fs.readFileSync(abs, 'utf8')
+    // A managed REGULAR file that has been replaced by a symlink would let
+    // readFileSync follow the link anywhere on disk. Refuse unless the
+    // resolved path stays inside the root.
+    const real = fs.realpathSync(abs)
+    if (path.relative(fs.realpathSync(root), real).startsWith('..')) {
+      return { ...base, kind: 'binary', identical: false, rows: [], detail: 'resolves outside the root — not shown' }
+    }
+    if (fs.statSync(real).size > MAX_DIFF_BYTES) {
+      return { ...base, kind: 'binary', identical: false, rows: [], detail: 'too large to diff' }
+    }
+    actual = fs.readFileSync(real, 'utf8')
   } catch {
     kind = 'missing'
   }
   if (kind === 'text' && actual.includes('\u0000')) return { ...base, kind: 'binary', identical: false, rows: [] }
 
   const identical = expected === actual
-  const rows = collapse(lineDiff(splitLines(expected), splitLines(actual)))
+  const aLines = splitLines(expected)
+  const bLines = splitLines(actual)
+  if (aLines.length > MAX_DIFF_LINES || bLines.length > MAX_DIFF_LINES) {
+    return { ...base, kind: 'binary', identical, rows: [], detail: 'too many lines to diff' }
+  }
+  const rows = collapse(lineDiff(aLines, bLines))
   return { ...base, kind, identical, rows }
 }
