@@ -941,6 +941,14 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
     ...lostInTranslation(ctx, toFold, preview.files, conflicts),
   ]
 
+  // The .claude/skills mirror repair is a real write syncApply performs
+  // outside generate() — it must show up here too, or a dry-run predicts
+  // nothing for it and an apply reports a count with no matching plan row.
+  const generates = [
+    ...preview.generates,
+    ...pendingSkillMirrors(root).map((rel) => ({ target: ownerOf(rel), path: rel })),
+  ].sort((a, b) => a.target.localeCompare(b.target) || a.path.localeCompare(b.path))
+
   return {
     mode,
     targets: enabled,
@@ -948,7 +956,7 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
     imports,
     conflicts,
     unsupported,
-    generates: preview.generates,
+    generates,
     clean,
     warnings: [...ctx.warnings, ...preview.warnings],
     sourceWrites: folded.writes.map(({ path: p, content }) => ({ path: p, content })),
@@ -973,18 +981,27 @@ function scanPaths(ctx) {
 
 // `npx skills add` owns skills dirs; the one thing sync repairs is the
 // .claude/skills mirror, which only gets written when a Claude agent happens
-// to be driving the install (§2).
-function repairSkillMirror(root) {
+// to be driving the install (§2). Split pure-vs-effecting so the plan
+// preview (syncPlan, --dry-run) can predict exactly the paths the real
+// repair (syncApply) creates — same list, not a second guess at it.
+function pendingSkillMirrors(root) {
   const agents = path.join(root, '.agents/skills')
   if (!fs.existsSync(agents)) return []
   const out = []
   for (const name of fs.readdirSync(agents)) {
     const mirror = path.join(root, '.claude/skills', name)
     if (fs.existsSync(mirror) || isLink(mirror)) continue
-    relSymlink(path.join(agents, name), mirror)
     out.push(path.join('.claude/skills', name))
   }
   return out
+}
+
+function repairSkillMirror(root) {
+  const agents = path.join(root, '.agents/skills')
+  return pendingSkillMirrors(root).map((rel) => {
+    relSymlink(path.join(agents, path.basename(rel)), path.join(root, rel))
+    return rel
+  })
 }
 
 // Stage every source write, then commit. Two phases so a failure — full

@@ -635,13 +635,31 @@ test('normalizing a flat hook is idempotent', () => {
   assert.equal(read(root, '.meta-harness/hooks/hooks.jsonc'), after, 'no diff')
 })
 
-test('repairs the .claude/skills mirror, never the skill itself', () => {
+// The skill-mirror repair is a real write syncApply performs outside
+// generate() — a dry-run that doesn't predict it, or a plan whose "= clean"
+// disagrees with an apply reporting "N files written", is exactly the kind
+// of drift 904c279 fixed for shared files. Same contract, second path.
+test('repairs the .claude/skills mirror, never the skill itself — predicted by the plan, not just done by apply', () => {
   const root = managed()
   write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(plan.imports, [], 'no other drift in this fixture')
+  assert.ok(
+    plan.generates.some((g) => g.path === '.claude/skills/meta-harness' && g.target === 'claude'),
+    'dry-run predicts the mirror repair'
+  )
+  assert.ok(!exists(root, '.claude/skills/meta-harness'), 'syncPlan never writes')
+
   const res = syncApply(root, {})
   assert.ok(res.written.includes('.claude/skills/meta-harness'))
   assert.equal(read(root, '.claude/skills/meta-harness/SKILL.md'), '# skill\n')
   assert.ok(!exists(root, '.meta-harness/skills'), 'skills dirs are never imported')
+  assert.deepEqual(
+    [...plan.generates.map((g) => g.path)].sort(),
+    [...res.written].sort(),
+    'the plan promised exactly what apply wrote'
+  )
 })
 
 test('unparseable native settings aborts before anything is written', () => {
