@@ -1,0 +1,197 @@
+/* ---------------------------------------------------------------------------
+   App-level motion + the two structural rules that are cheaper as CSS than as
+   utilities. Every value here comes from ./tokens.css — no raw colors.
+   Motion budget: 150-200ms, ease-out-quart, state only (DESIGN.md §Motion).
+--------------------------------------------------------------------------- */
+
+@keyframes mh-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mh-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mh-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Numbers that change on a poll cross-fade rather than snapping. Keyed on the
+   value, so the animation restarts only when the number actually moves. */
+.mh-fade {
+  animation: mh-fade-in var(--duration-base) var(--ease-out-quart);
+}
+
+/* Disclosure content: transform + opacity only, never layout properties. */
+.mh-rise {
+  animation: mh-rise-in var(--duration-base) var(--ease-out-quart);
+}
+
+.mh-breathe {
+  animation: mh-breathe 2.4s ease-in-out infinite;
+}
+
+/* tokens.css collapses every animation to 0.01ms under reduced motion, which
+   would turn an infinite pulse into a flicker. Stop it outright instead. */
+@media (prefers-reduced-motion: reduce) {
+  .mh-breathe {
+    animation: none !important;
+  }
+}
+
+/* No 300ms double-tap delay on touch, and no default grey flash on tap. */
+button,
+[role='tab'],
+a,
+select,
+summary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Scrolling a dialog or a bounded diff pane must not chain to the page. */
+[role='dialog'],
+[role='dialog'] * {
+  overscroll-behavior: contain;
+}
+
+/* WCAG 2.2 · 2.4.11 — the top bar is sticky, so keep scrolled-to focus clear
+   of it rather than letting it land underneath. */
+:focus {
+  scroll-margin-top: 5rem;
+  scroll-margin-bottom: 2rem;
+}
+
+/* Sticky table headers inside a scrolling panel. */
+.mh-sticky-head th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--color-raised);
+}
+
+/* ---------------------------------------------------------------------------
+   v2 "the sync map" — structural chrome (DESIGN.md v2). The TUI frame: panel
+   title sits ON the border line, the box-drawing gesture without literal
+   glyphs in the DOM.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --text-verdict: 1.375rem;
+  --text-verdict--line-height: 1.35;
+  --text-frame: 0.8125rem;
+  --text-frame--line-height: 1;
+}
+
+.mh-frame {
+  position: relative;
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.mh-frame > .mh-frame-title {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-frame);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* The source column: the double rule that makes the middle read as the
+   authority. Structure, not shadow — shadow barely reads on dark. */
+.mh-frame-source {
+  border-color: var(--color-line-strong);
+  background: var(--color-panel);
+  box-shadow: inset 0 0 0 3px var(--color-bg), inset 0 0 0 4px var(--color-line);
+}
+.mh-frame-source > .mh-frame-title {
+  color: var(--color-ink);
+}
+
+/* Target panels carry their tool's brand: tinted ground + tinted border,
+   driven by the `--brand` custom property set inline per panel. The tint is
+   6% — enough to answer "which tool" at a glance, dim enough that status
+   colors still dominate. */
+.mh-frame-brand {
+  border-color: color-mix(in oklab, var(--brand) 40%, var(--line));
+  background: color-mix(in oklab, var(--brand) 6%, var(--panel));
+}
+.mh-frame-brand > .mh-frame-title {
+  background: var(--bg);
+}
+
+/* Category trace: hovering a source category highlights the same category
+   group inside each target panel — replaces the v2 SVG connector wires. */
+.mh-cat-group {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px;
+  margin: -2px -2px 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-quart),
+    border-color var(--duration-fast) var(--ease-out-quart);
+}
+.mh-cat-hit {
+  background: color-mix(in oklab, var(--brand) 16%, transparent);
+  border-color: color-mix(in oklab, var(--brand) 50%, transparent);
+}
+
+/* Ghost panel: a detected-but-disabled target. Present, dim, real. */
+.mh-frame-ghost {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+/* Lane arrows draw themselves once per snapshot — the product explaining its
+   own flow. Poll refreshes must NOT replay it (key the group by snapshot id). */
+@keyframes mh-draw {
+  from {
+    stroke-dashoffset: var(--mh-dash, 48);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.mh-lane-arrow {
+  stroke-dasharray: var(--mh-dash, 48);
+  animation: mh-draw 250ms var(--ease-out-quart) both;
+  animation-delay: var(--mh-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mh-lane-arrow {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Verdict caret: the CLI prompt glyph, breathing only while a re-scan runs. */
+.mh-caret {
+  color: var(--color-accent);
+  user-select: none;
+}

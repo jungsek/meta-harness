@@ -1,0 +1,7 @@
+{
+  "permission": {
+    "bash": { "git status": "allow", "git diff*": "allow", "rm -rf *": "deny", "*": "ask" },
+    "read": { ".env*": "deny" }
+  },
+  "codex": { "approval_policy": "on-request", "sandbox_mode": "workspace-write" }
+}

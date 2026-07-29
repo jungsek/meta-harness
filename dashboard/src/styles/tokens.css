@@ -1,0 +1,190 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens — the machine-readable half of ../../DESIGN.md (v2 dark,
+   "Register + theme"). Every color below is produced and gated by
+   `node dashboard/scripts/validate-palette.mjs` (39/39). Do not hand-edit a
+   value without re-running it; the status six additionally carry a computed
+   worst-case CVD separation of dE 0.11 across all three dichromacies.
+--------------------------------------------------------------------------- */
+
+/* Palette lives on :root as hex fallback + OKLCH override (same computed
+   color — the hex values come out of validate-palette.mjs, not an eyedropper).
+   Semantic z-scale rides along. Never an arbitrary 999. */
+:root {
+  /* Grounds — near-black with the brand's 278deg ink-violet cast. */
+  --bg: #0b0c12;
+  --bg: oklch(0.155 0.014 278);
+  --panel: #12131b;
+  --panel: oklch(0.19 0.016 278);
+  --raised: #1b1c25;
+  --raised: oklch(0.23 0.018 278);
+  --line: #353742;
+  --line: oklch(0.34 0.02 278);
+  --line-strong: #555763;
+  --line-strong: oklch(0.46 0.02 278);
+
+  /* Ink. 15.9:1 on --bg; muted holds 4.5:1+ on panel AND raised. */
+  --ink: #e6e7ed;
+  --ink: oklch(0.93 0.008 278);
+  --muted: #aeafb8;
+  --muted: oklch(0.76 0.012 278);
+
+  /* Accent teal — prompt glyph, live dot, focus ring, links. On dark one
+     step carries text AND fills (10.2:1 on --bg); chroma capped at 0.11 so
+     it reads phosphor-calm, not neon. */
+  --accent: #4fccd9;
+  --accent: oklch(0.78 0.11 205);
+  --accent-soft: color-mix(in oklab, oklch(0.78 0.11 205) 14%, oklch(0.155 0.014 278));
+
+  /* Status vocabulary. Always rendered as color + glyph + word. */
+  --status-clean: #85cf95;
+  --status-clean: oklch(0.79 0.11 150);
+  --status-pending: #4ec2f9;
+  --status-pending: oklch(0.77 0.13 233);
+  --status-new: #b97aeb;
+  --status-new: oklch(0.69 0.17 308);
+  --status-changed: #f5af20;
+  --status-changed: oklch(0.8 0.16 78);
+  --status-conflict: #dc785f;
+  --status-conflict: oklch(0.68 0.13 35);
+  --status-missing: #9fa1ac;
+  --status-missing: oklch(0.71 0.016 278);
+
+  /* Pill grounds are OPAQUE, not alpha. As an alpha the ground composited
+     over whatever the row happened to be, which failed AA on the rendered v1
+     page. Opaque makes a pill's contrast identical everywhere it appears;
+     validate-palette.mjs gates this exact pair at 14% over --panel. */
+  --status-clean-soft: #20292b;
+  --status-clean-soft: color-mix(in oklab, oklch(0.79 0.11 150) 14%, oklch(0.19 0.016 278));
+  --status-pending-soft: #1c2835;
+  --status-pending-soft: color-mix(in oklab, oklch(0.77 0.13 233) 14%, oklch(0.19 0.016 278));
+  --status-new-soft: #262034;
+  --status-new-soft: color-mix(in oklab, oklch(0.69 0.17 308) 14%, oklch(0.19 0.016 278));
+  --status-changed-soft: #2c2623;
+  --status-changed-soft: color-mix(in oklab, oklch(0.8 0.16 78) 14%, oklch(0.19 0.016 278));
+  --status-conflict-soft: #2a2025;
+  --status-conflict-soft: color-mix(in oklab, oklch(0.68 0.13 35) 14%, oklch(0.19 0.016 278));
+  --status-missing-soft: #23242d;
+  --status-missing-soft: color-mix(in oklab, oklch(0.71 0.016 278) 14%, oklch(0.19 0.016 278));
+
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-backdrop: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+}
+
+/* Tailwind reads the same :root custom properties — one source of values. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-status-clean: var(--status-clean);
+  --color-status-pending: var(--status-pending);
+  --color-status-new: var(--status-new);
+  --color-status-changed: var(--status-changed);
+  --color-status-conflict: var(--status-conflict);
+  --color-status-missing: var(--status-missing);
+  --color-status-clean-soft: var(--status-clean-soft);
+  --color-status-pending-soft: var(--status-pending-soft);
+  --color-status-new-soft: var(--status-new-soft);
+  --color-status-changed-soft: var(--status-changed-soft);
+  --color-status-conflict-soft: var(--status-conflict-soft);
+  --color-status-missing-soft: var(--status-missing-soft);
+}
+
+@theme {
+  /* Type — mono-forward pairing per DESIGN.md v2. */
+  --font-sans: 'Inter var', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-display: 1.75rem;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.011em;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.3;
+  --text-h2--letter-spacing: -0.006em;
+  --text-h3: 1rem;
+  --text-h3--line-height: 1.4;
+  --text-h3--letter-spacing: -0.006em;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.55;
+  --text-data: 0.875rem;
+  --text-data--line-height: 1.5;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.4;
+  --text-micro: 0.8125rem;
+  --text-micro--line-height: 1.4;
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+
+  /* Motion — 150-200ms, ease-out-quart. State only, never decoration. */
+  --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.55;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Focus is never removed. 2px accent ring, 2px offset, on everything. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer utilities {
+  /* Content is visible by default; motion only ever transitions between
+     already-rendered states. Reduced motion collapses every one of them. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

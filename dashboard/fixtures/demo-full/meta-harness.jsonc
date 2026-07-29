@@ -1,0 +1,6 @@
+{
+  // source-of-truth directory
+  "sourceDir": ".meta-harness",
+  // targets to generate; "*" = all
+  "targets": ["claude", "codex"]
+}
