@@ -141,7 +141,10 @@ function detectDrift(root, manifest) {
 // A full run drops previously-owned keys that are no longer produced (that is
 // how a removed category leaves the file); a partial run didn't look at every
 // category, so keys owned by unselected ones must survive untouched.
-function mergeShared(root, out, prevOwned, warnings, partial) {
+// Exported for src/sync.js: computing the same bytes generate() would write
+// is the only way its plan preview can know whether a shared file (owned
+// values unchanged, but reformatted by sortKeys/serialize) actually changes.
+export function mergeShared(root, out, prevOwned, warnings, partial) {
   const existingRaw = readIf(path.join(root, out.path))
   let merged = out.data
   if (existingRaw !== null) {

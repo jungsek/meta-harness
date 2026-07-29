@@ -27,7 +27,7 @@ import path from 'node:path'
 import matter from 'gray-matter'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { detectTargets, splitDetected } from './detect.js'
-import { discover, generate, loadConfig, loadManifest } from './engine.js'
+import { discover, generate, loadConfig, loadManifest, mergeShared } from './engine.js'
 import { KNOWN_TARGETS } from './model.js'
 import { NAME_OK as CODEX_NAME_OK } from './targets/codex.js'
 import {
@@ -670,8 +670,14 @@ const ownerOf = (rel) =>
 // report to what sync would actually rewrite instead of the whole surface.
 // (Symlink targets point into the preview dir — rebase them onto the real
 // source before comparing.)
-function wouldChange(root, f, tmp, realSrc) {
-  const abs = path.join(root, f.path)
+// Shared files (.claude/settings.json, .codex/config.toml, …) cannot be
+// compared by owned-key *value* equality alone: generate() writes the
+// mergeShared() bytes, and sortKeys/serialize reformat + reorder even when
+// every owned value is unchanged (adopting a hand-formatted file is the
+// common case this bites). Run the same merge sync would actually apply and
+// compare bytes, or the preview quietly under-reports what apply writes.
+function wouldChange(ctx, f, tmp, realSrc, partial) {
+  const abs = path.join(ctx.root, f.path)
   if (f.symlinkTo) {
     const real = path.join(realSrc, path.relative(tmp, f.symlinkTo))
     return !isLink(abs) || fs.readlinkSync(abs) !== path.relative(path.dirname(abs), real)
@@ -679,14 +685,11 @@ function wouldChange(root, f, tmp, realSrc) {
   const existing = readIf(abs)
   if (existing === null) return true
   if (!f.shared) return existing !== f.content
-  try {
-    return !eq(pick(FORMATS[f.format](existing, f.path), f.keys), pick(f.data, f.keys))
-  } catch {
-    return true
-  }
+  const prevOwned = ctx.manifest.files[f.path]?.ownedKeys
+  return existing !== mergeShared(ctx.root, f, prevOwned, [], partial).content
 }
 
-function previewGenerates(ctx, writes) {
+function previewGenerates(ctx, writes, partial) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-sync-'))
   try {
     const realSrc = path.join(ctx.root, ctx.cfg.sourceDir)
@@ -700,7 +703,7 @@ function previewGenerates(ctx, writes) {
       only: null,
       targetNames: ctx.targetNames,
     })
-    const changed = res.files.filter((f) => wouldChange(ctx.root, f, tmp, realSrc))
+    const changed = res.files.filter((f) => wouldChange(ctx, f, tmp, realSrc, partial))
     return {
       files: res.files,
       generates: changed
@@ -900,7 +903,10 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
 
   const folded = foldAll(ctx, toFold)
   for (const c of folded.conflicts) conflicts.push({ ...c, prefer })
-  const preview = previewGenerates(ctx, folded.writes)
+  // Mirrors generate()'s own `partial = only || targets` (syncApply always
+  // calls generate with only unset) — a partial run retains previously-owned
+  // keys from unselected categories instead of dropping them.
+  const preview = previewGenerates(ctx, folded.writes, Boolean(targets))
 
   // A managed output that is simply gone gets recreated by the generate at
   // the end of sync. That restores rather than destroys, so it is not a

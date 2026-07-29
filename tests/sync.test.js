@@ -76,10 +76,14 @@ test('bootstrap: claude-only repo gains a working codex without questions', () =
   assert.equal(plan.conflicts.length, 0)
   assert.ok(plan.imports.some((i) => i.category === 'connections' && i.name === 'linear' && i.kind === 'new'))
   assert.ok(plan.imports.some((i) => i.category === 'rules' && i.name === 'AGENTS.md'))
-  // generates carries the target so the plan report can group by it (§3)
-  // …and .claude/settings.json is absent: the fold round-trips its owned
-  // keys exactly, so sync has nothing to rewrite on the side it imported from
+  // generates carries the target so the plan report can group by it (§3).
+  // .claude/settings.json IS listed even though the fold round-trips its
+  // owned key *values* exactly: generate() still rewrites the file, because
+  // sortKeys/serialize reformat it into canonical (sorted-key) JSON, which
+  // differs byte-for-byte from the hand-formatted native file it was adopted
+  // from. A plan that omitted it here would under-report what apply writes.
   assert.deepEqual(plan.generates, [
+    { target: 'claude', path: '.claude/settings.json' },
     { target: 'codex', path: '.codex/config.toml' },
     { target: 'codex', path: '.codex/hooks.json' },
     { target: 'codex', path: '.codex/rules/meta-harness.rules' },
@@ -90,6 +94,11 @@ test('bootstrap: claude-only repo gains a working codex without questions', () =
 
   const res = syncApply(root, { targets: TARGETS })
   assert.ok(res.written.includes('.codex/config.toml'))
+  assert.deepEqual(
+    [...plan.generates.map((g) => g.path)].sort(),
+    [...res.written].sort(),
+    'the plan promised exactly what apply wrote — no silent extra writes'
+  )
 
   // source now exists and is the truth
   assert.ok(exists(root, 'meta-harness.jsonc'))
@@ -746,4 +755,43 @@ test('a real agent with broken frontmatter stays a loud failure, not a silent sk
   // then fails loudly, since the content really can't be modeled as an agent.
   assert.throws(() => syncApply(root, { targets: TARGETS }), /frontmatter parse failed/)
   assert.equal(read(root, '.claude/agents/broken.md'), '---\ndescription: [unterminated\n---\nDoes stuff.\n', 'native file untouched')
+})
+
+// The plan is what a user reads before deciding to apply (V1-FOCUS §3) — a
+// plan that lists fewer paths than apply actually writes is a plan that
+// lies. Shared files are the trap: adopting a hand-formatted native file
+// round-trips its owned key *values* exactly, but generate() still rewrites
+// it (sortKeys/serialize reformat), so a value-equality-only preview
+// under-reports by exactly the shared files being adopted for the first
+// time. Locks plan.generates against res.written across both bootstrap
+// directions so this can't silently drift back.
+test('plan.generates matches what syncApply actually writes, bootstrap both directions', () => {
+  const claudeRoot = claudeOnly()
+  const claudePlan = syncPlan(claudeRoot, { targets: TARGETS })
+  const claudeRes = syncApply(claudeRoot, { targets: TARGETS })
+  assert.deepEqual(
+    [...claudePlan.generates.map((g) => g.path)].sort(),
+    [...claudeRes.written].sort(),
+    'claude-only bootstrap: plan promised exactly what apply wrote'
+  )
+  assert.ok(claudePlan.generates.some((g) => g.path === '.claude/settings.json'), 'reformatted shared file is not silently dropped')
+
+  const codexRoot = tmp()
+  write(
+    codexRoot,
+    '.codex/config.toml',
+    ['[mcp_servers.deepwiki]', 'url = "https://mcp.deepwiki.com/mcp"', '', 'approval_policy = "on-request"', 'model = "gpt-5"', ''].join(
+      '\n'
+    )
+  )
+  write(codexRoot, '.codex/hooks.json', JSON.stringify({ hooks: { PreToolUse: [{ type: 'command', command: 'guard.sh' }] } }))
+  write(codexRoot, 'AGENTS.md', '# House rules\n\nAlways run tests.\n')
+  const codexPlan = syncPlan(codexRoot, { targets: TARGETS })
+  const codexRes = syncApply(codexRoot, { targets: TARGETS })
+  assert.deepEqual(
+    [...codexPlan.generates.map((g) => g.path)].sort(),
+    [...codexRes.written].sort(),
+    'codex-only bootstrap: plan promised exactly what apply wrote'
+  )
+  assert.ok(codexPlan.generates.some((g) => g.path === '.codex/config.toml'), 'reformatted shared file is not silently dropped')
 })
