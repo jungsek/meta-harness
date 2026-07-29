@@ -660,9 +660,11 @@ test('refuses to force-generate over config it never scanned', () => {
   assert.equal(read(root, '.meta-harness/connections/mcp.jsonc'), src, 'refused before the fold — repo untouched')
 })
 
-// V1-FOCUS §2: a non-agent file sitting in a managed agents dir must never
-// block sync — it is content, not config.
-test('a non-agent file in .claude/agents/ is skipped, never blocks, never imported', () => {
+// V1-FOCUS §2: a README.md sitting in a managed agents/commands dir must
+// never block sync — mirrors listMd's own exclusion (util.js: a README.md is
+// never model content on the source side either), so it is never a
+// candidate for import in the first place.
+test('a README.md in .claude/agents/ is skipped, never blocks, never imported', () => {
   const root = tmp()
   write(root, '.claude/agents/README.md', '# Agents\n\nThis dir holds agent definitions.\n')
   write(root, '.claude/agents/planner.md', '---\ndescription: plans\n---\nYou plan.\n')
@@ -680,6 +682,45 @@ test('a non-agent file in .claude/agents/ is skipped, never blocks, never import
   assert.equal(read(root, '.claude/agents/README.md'), '# Agents\n\nThis dir holds agent definitions.\n', 'left in place')
   assert.ok(!exists(root, '.meta-harness/agents/README.md'), 'never folded into the source')
   assert.match(read(root, '.meta-harness/agents/planner.md'), /You plan\./, 'the real agent alongside it still imports')
+})
+
+// Same fix, same reason, the other managed dir: a plain-prose command file
+// (Claude slash commands need no frontmatter at all, so "no frontmatter"
+// alone is never a valid skip signal here — only the README.md name is).
+test('a README.md in .claude/commands/ is skipped, never blocks, never imported', () => {
+  const root = tmp()
+  write(root, '.claude/commands/README.md', '# Commands\n\nThis dir holds slash commands.\n')
+  write(root, '.claude/commands/ship.md', 'Ship it.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.conflicts, [])
+  assert.equal(plan.unsupported.filter((u) => u.fatal).length, 0, 'nothing fatal')
+  assert.ok(
+    plan.unsupported.some((u) => u.path === '.claude/commands/README.md' && u.skipped),
+    'README surfaces once in the plan feed'
+  )
+  assert.ok(!plan.imports.some((i) => i.name === 'README'), 'never treated as an importable item')
+
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.claude/commands/README.md'), '# Commands\n\nThis dir holds slash commands.\n', 'left in place')
+  assert.ok(!exists(root, '.meta-harness/commands/README.md'), 'never folded into the source')
+  assert.match(read(root, '.meta-harness/commands/ship.md'), /Ship it\./, 'the real frontmatter-less command still imports')
+})
+
+// A real subagent with no frontmatter at all (just a name, no description)
+// is exactly what loadModel already accepts — it must import like any other
+// agent, not get caught by a README-only exclusion.
+test('a frontmatter-less agent that is not named README.md still imports', () => {
+  const root = tmp()
+  write(root, '.claude/agents/quick-helper.md', '# Quick helper\n\nHelps quickly.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.unsupported, [])
+  assert.ok(plan.imports.some((i) => i.name === 'quick-helper'))
+
+  syncApply(root, { targets: TARGETS })
+  assert.match(read(root, '.meta-harness/agents/quick-helper.md'), /Helps quickly\./)
+  assert.ok(exists(root, '.claude/agents/quick-helper.md'))
 })
 
 test('a non-.toml file in .codex/agents/ is invisible to sync, same as before', () => {

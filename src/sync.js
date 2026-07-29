@@ -32,6 +32,7 @@ import { KNOWN_TARGETS } from './model.js'
 import { NAME_OK as CODEX_NAME_OK } from './targets/codex.js'
 import {
   canonicalJson,
+  isDocFile,
   isLink,
   parseJsonc,
   pick,
@@ -223,16 +224,15 @@ function fileItems(ctx, target, { dir, category, ext }) {
       if (!entry) ctx.warnings.push(`${rel}: symlink meta-harness did not write — left alone, not imported`)
       continue
     }
-    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
-    // V1-FOCUS §2: a real subagent needs frontmatter to be recognized as one
-    // at all (every emitter injects at least `name:`) — a plain README or
-    // notes file with none is content, not config, and must never block
-    // sync. Frontmatter that exists but fails to parse is a real broken
-    // agent, not a non-definition — that one stays a loud (fatal) complaint.
-    if (present && category === 'agents' && ext === '.md' && !isAgentDefinition(raw)) {
-      ctx.unsupported.push({ target, path: rel, skipped: true, reason: 'not an agent definition — left in place' })
+    // V1-FOCUS §2: mirror listMd's own exclusion (util.js) — a README.md is
+    // never model content on the source side either, so importing it would
+    // silently drop it from the target that had it. Catch it before the
+    // fold, not after: same file, same reason, in every managed dir.
+    if (present && isDocFile(name)) {
+      ctx.unsupported.push({ target, path: rel, skipped: true, reason: 'documentation file, not a definition — left in place' })
       continue
     }
+    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
     const exp = ctx.expected.get(rel)
     const expected = exp ? (exp.content ?? readIf(exp.symlinkTo) ?? undefined) : undefined
     const tracked = Boolean(entry)
@@ -260,23 +260,6 @@ function fileItems(ctx, target, { dir, category, ext }) {
 
 // CLAUDE.md that is only the generated @AGENTS.md import carries no prose.
 const isStub = (raw) => /^\s*(<!--[^]*?-->\s*)*@AGENTS\.md\s*$/.test(raw)
-
-// A file with no frontmatter fields at all is not an agent definition —
-// mirrors what loadModel accepts (parseAgents warns, doesn't error, on a
-// missing description; but there is no agent at all without frontmatter to
-// hold it). Malformed frontmatter is a different problem — surfaced as-is.
-// `{}` as the options arg opts out of gray-matter's content-keyed cache: a
-// plain `matter(raw)` here would cache this parse (success or thrown, the
-// engine still stashes a `{data: {}}` entry on failure), and the real parse
-// of the same content later in model.js would then silently read that
-// cached empty result back instead of re-throwing.
-const isAgentDefinition = (raw) => {
-  try {
-    return Object.keys(matter(raw, {}).data).length > 0
-  } catch {
-    return true
-  }
-}
 
 function rulesItems(ctx) {
   const out = []

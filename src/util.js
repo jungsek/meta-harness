@@ -7,11 +7,16 @@ export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex')
 
 export const readIf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null)
 
+// A file named exactly README.md in a source category dir documents the dir,
+// it is never model content — exported so callers outside model.js (sync.js's
+// non-definition skip) can't drift from this exclusion.
+export const isDocFile = (name) => name === 'README.md'
+
 export const listMd = (dir) => {
   if (!fs.existsSync(dir)) return []
   return fs
     .readdirSync(dir, { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith('.md') && e.name !== 'README.md')
+    .filter((e) => e.isFile() && e.name.endsWith('.md') && !isDocFile(e.name))
     .map((e) => path.join(dir, e.name))
     .sort()
 }
