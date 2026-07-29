@@ -1,0 +1,1 @@
+../../.meta-harness/commands/ship.md

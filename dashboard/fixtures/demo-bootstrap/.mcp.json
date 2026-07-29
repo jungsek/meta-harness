@@ -1,0 +1,1 @@
+{ "mcpServers": { "postgres": { "url": "https://mcp.postgres.internal/orbit" } } }

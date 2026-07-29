@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "stripe": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@stripe/mcp-server"
+      ],
+      "env": {
+        "STRIPE_API_KEY": "${STRIPE_API_KEY}"
+      }
+    },
+    "postgres": {
+      "url": "https://mcp.postgres.internal/orbit"
+    }
+  }
+}

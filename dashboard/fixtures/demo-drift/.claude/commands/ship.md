@@ -1,0 +1,1 @@
+/Users/jungsek/jung-os/PROJECTS-OS/meta-harness/dashboard/fixtures/demo-full/.meta-harness/commands/ship.md

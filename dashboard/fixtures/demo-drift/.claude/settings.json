@@ -1,0 +1,47 @@
+{
+  "enableAllProjectMcpServers": true,
+  "enabledPlugins": {
+    "conventional-commits@anthropics": true
+  },
+  "env": {
+    "LOG_LEVEL": "warn",
+    "ORBIT_ENV": "development"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "scripts/guard-bash.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "git fetch --quiet",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Bash(git diff*)",
+      "Bash(git status)"
+    ],
+    "ask": [
+      "Bash(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Read(.env*)"
+    ]
+  }
+}

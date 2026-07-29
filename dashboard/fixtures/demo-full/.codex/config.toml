@@ -1,0 +1,18 @@
+approval_policy = "on-request"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+[mcp_servers.postgres]
+url = "https://mcp.postgres.internal/orbit"
+
+[mcp_servers.stripe]
+args = [ "-y", "@stripe/mcp-server" ]
+command = "npx"
+
+[mcp_servers.stripe.env]
+STRIPE_API_KEY = "${STRIPE_API_KEY}"
+
+[shell_environment_policy.set]
+LOG_LEVEL = "debug"
+ORBIT_ENV = "development"
+

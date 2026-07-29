@@ -1,0 +1,89 @@
+/* ---------------------------------------------------------------------------
+   App-level motion + the two structural rules that are cheaper as CSS than as
+   utilities. Every value here comes from ./tokens.css — no raw colors.
+   Motion budget: 150-200ms, ease-out-quart, state only (DESIGN.md §Motion).
+--------------------------------------------------------------------------- */
+
+@keyframes mh-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mh-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mh-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Numbers that change on a poll cross-fade rather than snapping. Keyed on the
+   value, so the animation restarts only when the number actually moves. */
+.mh-fade {
+  animation: mh-fade-in var(--duration-base) var(--ease-out-quart);
+}
+
+/* Disclosure content: transform + opacity only, never layout properties. */
+.mh-rise {
+  animation: mh-rise-in var(--duration-base) var(--ease-out-quart);
+}
+
+.mh-breathe {
+  animation: mh-breathe 2.4s ease-in-out infinite;
+}
+
+/* tokens.css collapses every animation to 0.01ms under reduced motion, which
+   would turn an infinite pulse into a flicker. Stop it outright instead. */
+@media (prefers-reduced-motion: reduce) {
+  .mh-breathe {
+    animation: none !important;
+  }
+}
+
+/* No 300ms double-tap delay on touch, and no default grey flash on tap. */
+button,
+[role='tab'],
+a,
+select,
+summary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Scrolling a dialog or a bounded diff pane must not chain to the page. */
+[role='dialog'],
+[role='dialog'] * {
+  overscroll-behavior: contain;
+}
+
+/* WCAG 2.2 · 2.4.11 — the top bar is sticky, so keep scrolled-to focus clear
+   of it rather than letting it land underneath. */
+:focus {
+  scroll-margin-top: 5rem;
+  scroll-margin-bottom: 2rem;
+}
+
+/* Sticky table headers inside a scrolling panel. */
+.mh-sticky-head th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--color-raised);
+}

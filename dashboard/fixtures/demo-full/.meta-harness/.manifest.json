@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "files": {
+    ".claude/commands/ship.md": {
+      "symlink": "../../.meta-harness/commands/ship.md"
+    },
+    ".claude/agents/reviewer.md": {
+      "hash": "8707c78f45dee4bc9b4c189859c44e962c74e7635f24337deefb08bcc77cb777"
+    },
+    ".mcp.json": {
+      "hash": "2eec2eaffce94e33fb853ec2c1eb7b8d66c1a9174ed1e6dd063c4882390f5282"
+    },
+    ".codex/agents/reviewer.toml": {
+      "hash": "af869165f22111c2ff33acda3c3e3f3f687a22c50aaddac6c9173a155e25e824"
+    },
+    ".codex/hooks.json": {
+      "hash": "5e224eaab5a67f137af6fde1724bf4a05c078a719782c8ec9a29b983e315e2d6"
+    },
+    ".codex/rules/meta-harness.rules": {
+      "hash": "e75d80422fdc628609a2b2beba66da7d94dac547ebdfe2b325d8ee3469e44ad2"
+    },
+    "AGENTS.md": {
+      "hash": "4268c787f7f495d7bad84708f18ba1d9ac3204715a5599d620e050a8a38ae3e3"
+    },
+    "CLAUDE.md": {
+      "hash": "8635ed038d3e0a5b84a0dc9d072bbcaada0e068cd5f8b49cc2db2ee1b630376a"
+    },
+    ".claude/settings.json": {
+      "format": "json",
+      "ownedKeys": [
+        "env",
+        "hooks",
+        "enabledPlugins",
+        "permissions",
+        "model",
+        "enableAllProjectMcpServers"
+      ],
+      "ownedHash": "d569e7d56709fa05b2ce59f7642002cc6aa5425cfc670dbff8b9c935cd158514"
+    },
+    ".codex/config.toml": {
+      "format": "toml",
+      "ownedKeys": [
+        "mcp_servers",
+        "shell_environment_policy",
+        "approval_policy",
+        "sandbox_mode",
+        "model_reasoning_effort"
+      ],
+      "ownedHash": "22218dd4ae4cb063b7d31ac05d519024c9b4ecc3fa6cf52272ca5d0266fe5b79"
+    }
+  }
+}

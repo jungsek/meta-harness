@@ -1,0 +1,15 @@
+{
+  "model": "sonnet",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)"
+    ]
+  }
+}
