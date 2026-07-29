@@ -118,16 +118,24 @@ function LaneCol({
   lane,
   toward,
   vertical,
+  summary = false,
   onSelect,
 }: {
   lane: Lane
   toward: 'left' | 'right'
   vertical: boolean
+  /** Bootstrap mode: everything imports at once — one arrow per direction says it better than a wall of them. */
+  summary?: boolean
   onSelect: (sel: Selection) => void
 }) {
   const [showAll, setShowAll] = useState(false)
-  const rows = showAll ? lane.arrows : lane.arrows.slice(0, ARROW_CAP)
-  const hidden = lane.arrows.length - rows.length
+  const allRows = summary
+    ? ([lane.arrows.find((a) => a.direction === 'import'), lane.arrows.find((a) => a.direction === 'generate')].filter(
+        Boolean,
+      ) as LaneArrow[])
+    : lane.arrows
+  const rows = showAll ? allRows : allRows.slice(0, ARROW_CAP)
+  const hidden = summary ? 0 : allRows.length - rows.length
   const idle = lane.arrows.length === 0 && lane.conflicts.length === 0
   return (
     <div
@@ -539,13 +547,13 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
     return (
       <div className="flex flex-col gap-2">
         {left && <TargetColumn panel={left} onSelect={onSelect} />}
-        {left && <LaneCol lane={laneFor(left.target)} toward="left" vertical onSelect={onSelect} />}
+        {left && <LaneCol lane={laneFor(left.target)} toward="left" vertical summary={model.mode === 'bootstrap'} onSelect={onSelect} />}
         <SourceColumn model={model} onSelect={onSelect} />
-        {right && <LaneCol lane={laneFor(right.target)} toward="right" vertical onSelect={onSelect} />}
+        {right && <LaneCol lane={laneFor(right.target)} toward="right" vertical summary={model.mode === 'bootstrap'} onSelect={onSelect} />}
         {right && <TargetColumn panel={right} onSelect={onSelect} />}
         {overflow.map((p) => (
           <div key={p.target} className="flex flex-col gap-2">
-            <LaneCol lane={laneFor(p.target)} toward="right" vertical onSelect={onSelect} />
+            <LaneCol lane={laneFor(p.target)} toward="right" vertical summary={model.mode === 'bootstrap'} onSelect={onSelect} />
             <TargetColumn panel={p} onSelect={onSelect} />
           </div>
         ))}
@@ -565,16 +573,16 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
       <div ref={containerRef} className="relative grid grid-cols-[1fr_56px_1.35fr_56px_1fr] items-start gap-0">
         <Connectors container={containerRef} activeCat={activeCat} />
         {left ? <TargetColumn panel={left} onSelect={onSelect} /> : <div />}
-        <LaneCol lane={laneFor(left?.target)} toward="right" vertical={false} onSelect={onSelect} />
+        <LaneCol lane={laneFor(left?.target)} toward="right" vertical={false} summary={model.mode === 'bootstrap'} onSelect={onSelect} />
         <SourceColumn model={model} onSelect={onSelect} onTrace={setActiveCat} />
-        <LaneCol lane={laneFor(right?.target)} toward="left" vertical={false} onSelect={onSelect} />
+        <LaneCol lane={laneFor(right?.target)} toward="left" vertical={false} summary={model.mode === 'bootstrap'} onSelect={onSelect} />
         {right ? <TargetColumn panel={right} onSelect={onSelect} /> : <div />}
       </div>
       {overflow.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
           {overflow.map((p) => (
             <div key={p.target} className="flex flex-col gap-1">
-              <LaneCol lane={laneFor(p.target)} toward="right" vertical onSelect={onSelect} />
+              <LaneCol lane={laneFor(p.target)} toward="right" vertical summary={model.mode === 'bootstrap'} onSelect={onSelect} />
               <TargetColumn panel={p} onSelect={onSelect} />
             </div>
           ))}

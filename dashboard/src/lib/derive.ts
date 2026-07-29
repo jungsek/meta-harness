@@ -182,8 +182,10 @@ export function deriveVerdict(snap: Snapshot): Verdict {
     const noun = gates.length === 1 ? 'trust gate' : 'trust gates'
     return {
       tone: 'action',
+      // No command chip: a gate's remedy is a prose sentence (open the tool,
+      // accept a prompt), and those live in the needs-action tab below.
       text: `In sync, but ${gates.length} ${noun} still ${gates.length === 1 ? 'keeps' : 'keep'} generated config inert.`,
-      command: gates[0]!.hint,
+      command: null,
     }
   }
   return { tone: 'ok', text: 'In sync — every target matches the source.', command: null }

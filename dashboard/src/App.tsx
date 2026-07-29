@@ -196,6 +196,9 @@ function PromptBar({
   onRescan: () => void
 }) {
   const live = origin === 'live'
+  // Controlled so picking a root closes the popover — leaving it open over
+  // the fresh map reads as a stuck menu.
+  const [rootsOpen, setRootsOpen] = React.useState(false)
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] flex min-h-13 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-2 min-[640px]:px-6">
       <span className="font-mono text-label font-semibold text-ink">
@@ -205,7 +208,7 @@ function PromptBar({
         meta-harness
       </span>
 
-      <Popover>
+      <Popover open={rootsOpen} onOpenChange={setRootsOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -228,7 +231,10 @@ function PromptBar({
                   <li key={entry.path}>
                     <button
                       type="button"
-                      onClick={() => onSelectRoot(entry.path)}
+                      onClick={() => {
+                        setRootsOpen(false)
+                        onSelectRoot(entry.path)
+                      }}
                       aria-current={active ? 'true' : undefined}
                       className={cn(
                         'flex w-full items-start gap-2 rounded-control px-2 py-1.5 text-left transition-colors duration-fast ease-out-quart',
