@@ -150,9 +150,9 @@ export default function App() {
           {loading ? <LoadingView /> : null}
           {!loading && model && snapshot ? (
             <div className="flex flex-col gap-4">
-              <GlyphKey />
               <Insights model={model} rescanning={rescanning} />
               <SyncMap model={model} onSelect={setSelection} />
+              <GlyphKey />
               <Drawer selection={selection} snapshot={snapshot} model={model} onClose={() => setSelection(null)} />
             </div>
           ) : null}

@@ -134,6 +134,34 @@ summary {
   color: var(--color-ink);
 }
 
+/* Target panels carry their tool's brand: tinted ground + tinted border,
+   driven by the `--brand` custom property set inline per panel. The tint is
+   6% — enough to answer "which tool" at a glance, dim enough that status
+   colors still dominate. */
+.mh-frame-brand {
+  border-color: color-mix(in oklab, var(--brand) 40%, var(--line));
+  background: color-mix(in oklab, var(--brand) 6%, var(--panel));
+}
+.mh-frame-brand > .mh-frame-title {
+  background: var(--bg);
+}
+
+/* Category trace: hovering a source category highlights the same category
+   group inside each target panel — replaces the v2 SVG connector wires. */
+.mh-cat-group {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px;
+  margin: -2px -2px 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-quart),
+    border-color var(--duration-fast) var(--ease-out-quart);
+}
+.mh-cat-hit {
+  background: color-mix(in oklab, var(--brand) 16%, transparent);
+  border-color: color-mix(in oklab, var(--brand) 50%, transparent);
+}
+
 /* Ghost panel: a detected-but-disabled target. Present, dim, real. */
 .mh-frame-ghost {
   border-style: dashed;

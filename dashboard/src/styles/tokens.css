@@ -27,8 +27,8 @@
   /* Ink. 15.9:1 on --bg; muted holds 4.5:1+ on panel AND raised. */
   --ink: #e6e7ed;
   --ink: oklch(0.93 0.008 278);
-  --muted: #a3a4ac;
-  --muted: oklch(0.72 0.012 278);
+  --muted: #aeafb8;
+  --muted: oklch(0.76 0.012 278);
 
   /* Accent teal — prompt glyph, live dot, focus ring, links. On dark one
      step carries text AND fills (10.2:1 on --bg); chroma capped at 0.11 so
@@ -121,8 +121,8 @@
   --text-data--line-height: 1.5;
   --text-label: 0.8125rem;
   --text-label--line-height: 1.4;
-  --text-micro: 0.75rem;
-  --text-micro--line-height: 1.35;
+  --text-micro: 0.8125rem;
+  --text-micro--line-height: 1.4;
 
   --radius-control: 6px;
   --radius-panel: 10px;

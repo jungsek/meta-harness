@@ -99,7 +99,7 @@ const T = {
   line: oklch(0.34, 0.02, 278),
   lineStrong: oklch(0.46, 0.02, 278),
   ink: oklch(0.93, 0.008, 278),
-  muted: oklch(0.72, 0.012, 278),
+  muted: oklch(0.76, 0.012, 278),
   // On dark, one accent step carries text AND fills (10.2:1 on --bg); the
   // v1 accent/accent-strong split is gone.
   accent: oklch(0.78, 0.11, 205),

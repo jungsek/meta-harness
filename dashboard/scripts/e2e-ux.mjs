@@ -54,13 +54,12 @@ page.on('pageerror', (err) => results.push(`PAGE-ERROR ${String(err).slice(0, 14
 await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
 await shoot(page, '01-drift-map.png')
 
-await check('insights tabs switch and keep content', async () => {
-  await page.getByRole('tab', { name: /notes/i }).click()
-  assert.ok(await page.getByText(/deleted natively/i).first().isVisible(), 'notes content missing')
-  await page.getByRole('tab', { name: /needs action/i }).click()
+await check('insights disclosure lists actions then notes', async () => {
+  // Actions exist on the drift root, so the disclosure starts open.
   assert.ok(await page.getByText(/folder trust/i).first().isVisible(), 'actions content missing')
+  assert.ok(await page.getByText(/deleted natively/i).first().isVisible(), 'notes content missing')
 })
-await shoot(page, '02-insights-notes-tab.png')
+await shoot(page, '02-insights-details-open.png')
 
 await check('copy chip copies the verdict command', async () => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -70,7 +69,7 @@ await check('copy chip copies the verdict command', async () => {
 })
 
 await check('source item drawer (rules body)', async () => {
-  await page.locator('[data-conn="rules"]').click()
+  await page.locator('.mh-frame-source button', { hasText: 'rules' }).first().click()
   await page.locator('.mh-frame-source button', { hasText: 'guardrails' }).first().click().catch(async () => {
     // fall back to the first item under rules
     await page.locator('.mh-frame-source ul button').first().click()
@@ -119,13 +118,13 @@ await check('help popover renders reference tables', async () => {
 await shoot(page, '07-help-popover.png')
 await page.keyboard.press('Escape')
 
-await check('connector wires draw on category hover', async () => {
-  await page.locator('[data-conn="agents"]').hover()
+await check('category hover highlights the matching target groups', async () => {
+  await page.locator('.mh-frame-source button', { hasText: 'agents' }).first().hover()
   await page.waitForTimeout(400)
-  const wires = await page.locator('.pointer-events-none path').count()
-  assert.ok(wires >= 1, `no wires (${wires})`)
+  const hits = await page.locator('.mh-cat-hit').count()
+  assert.ok(hits >= 1, `no highlighted target groups (${hits})`)
 })
-await shoot(page, '08-connectors.png')
+await shoot(page, '08-category-trace.png')
 
 await check('re-scan completes and returns to idle', async () => {
   await page.getByRole('button', { name: /re-scan/i }).click()

@@ -4,7 +4,7 @@
  * Imports flow inward, generates flow outward, conflicts sit in the lane.
  * All interpretation happens in lib/derive.ts; this file only draws.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Mono, StatusPill } from '@/components/chrome'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Tooltip } from '@/components/ui'
 import type { Lane, LaneArrow, SourceCategory, SyncMapModel, TargetPanel } from '@/lib/derive'
@@ -25,15 +25,18 @@ function Frame({
   title,
   variant,
   className,
+  style,
   children,
 }: {
   title: React.ReactNode
   variant?: 'source' | 'ghost'
   className?: string
+  style?: React.CSSProperties
   children: React.ReactNode
 }) {
   return (
     <section
+      style={style}
       className={cn(
         'mh-frame',
         variant === 'source' && 'mh-frame-source',
@@ -209,7 +212,6 @@ function SourceCategoryRow({
     >
       <CollapsibleTrigger
         aria-controls={id}
-        data-conn={cat.category}
         onMouseEnter={() => onTrace?.(cat.category)}
         onMouseLeave={() => !open && onTrace?.(null)}
         onFocus={() => onTrace?.(cat.category)}
@@ -346,9 +348,18 @@ function SourceColumn({
 
 /* --------------------------------------------------------- target panels */
 
-function TargetColumn({ panel, onSelect }: { panel: TargetPanel } & SelectProps) {
+function TargetColumn({
+  panel,
+  activeCat,
+  onSelect,
+}: { panel: TargetPanel; activeCat?: string | null } & SelectProps) {
+  const brand = brandOf(panel.target)
   return (
-    <Frame title={<BrandTitle target={panel.target} />} className="p-3 pt-4">
+    <Frame
+      title={<BrandTitle target={panel.target} />}
+      className="mh-frame-brand p-3 pt-4"
+      style={{ ['--brand' as string]: brand.color }}
+    >
       <p className="mb-2 px-1 text-label text-muted">
         native config · {plural(panel.fileCount, 'file')}
         {panel.attention > 0 && (
@@ -360,9 +371,8 @@ function TargetColumn({ panel, onSelect }: { panel: TargetPanel } & SelectProps)
       ) : (
         <div className="flex flex-col gap-2">
           {panel.groups.map((group) => (
-            <div key={group.category}>
-              {/* plain span: Mono strips unknown props, and the connector overlay needs this data attribute in the DOM */}
-              <span data-conn-target={`${panel.target}:${group.category}`} className="block px-1 font-mono text-micro text-muted">
+            <div key={group.category} className={cn('mh-cat-group', activeCat === group.category && 'mh-cat-hit')}>
+              <span className="block px-1 font-mono text-micro text-muted">
                 {group.category}
               </span>
               <ul>
@@ -420,81 +430,6 @@ function GhostPanel({ panel, onSelect }: { panel: TargetPanel } & SelectProps) {
   )
 }
 
-/* ------------------------------------------------------------ connectors */
-
-interface Wire {
-  key: string
-  d: string
-  color: string
-}
-
-/**
- * Category-mapping wires: hover (or expand) a source category and lines are
- * drawn from that row to the same category group in each target panel, in the
- * target's brand color. Pointer-events none; purely explanatory.
- */
-function Connectors({ container, activeCat }: { container: React.RefObject<HTMLDivElement | null>; activeCat: string | null }) {
-  const [wires, setWires] = useState<Wire[]>([])
-  const [size, setSize] = useState({ w: 0, h: 0 })
-
-  useLayoutEffect(() => {
-    const el = container.current
-    if (!el || !activeCat) {
-      setWires([])
-      return
-    }
-    const compute = () => {
-      const base = el.getBoundingClientRect()
-      setSize({ w: base.width, h: base.height })
-      const from = el.querySelector<HTMLElement>(`[data-conn="${activeCat}"]`)
-      if (!from) {
-        setWires([])
-        return
-      }
-      const f = from.getBoundingClientRect()
-      const next: Wire[] = []
-      for (const to of el.querySelectorAll<HTMLElement>('[data-conn-target]')) {
-        const [target, cat] = (to.dataset.connTarget ?? '').split(':')
-        if (cat !== activeCat || !target) continue
-        const t = to.getBoundingClientRect()
-        const leftward = t.left < f.left
-        const x1 = (leftward ? f.left : f.right) - base.left
-        const y1 = f.top + f.height / 2 - base.top
-        const x2 = (leftward ? t.right : t.left) - base.left
-        const y2 = t.top + t.height / 2 - base.top
-        const dx = (x2 - x1) / 2
-        next.push({
-          key: `${target}:${cat}`,
-          d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
-          color: brandOf(target).color,
-        })
-      }
-      setWires(next)
-    }
-    compute()
-    window.addEventListener('resize', compute)
-    return () => window.removeEventListener('resize', compute)
-  }, [container, activeCat])
-
-  if (wires.length === 0) return null
-  return (
-    <svg
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-[var(--z-dropdown)]"
-      width={size.w}
-      height={size.h}
-      fill="none"
-    >
-      {wires.map((w) => (
-        <g key={w.key} className="mh-fade">
-          <path d={w.d} stroke={w.color} strokeWidth="1.5" opacity="0.8" />
-          <circle cx={w.d.split(' ')[1]} cy={w.d.split(' ')[2]} r="2.5" fill={w.color} />
-        </g>
-      ))}
-    </svg>
-  )
-}
-
 /* ----------------------------------------------------------------- glyphs */
 
 const GLYPH_KEY: { kind: Parameters<typeof resolve>[0]; hint: string }[] = [
@@ -536,8 +471,8 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
   // Overflow targets (3+ enabled) stack under the map rather than breaking it.
   const overflow = useMemo(() => rest ?? [], [rest])
 
-  // Category-trace wires (desktop only — the stacked layout has no gap to draw in).
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  // Category trace: hovering a source category highlights the matching
+  // category group in each target panel (desktop only — no hover on touch).
   const [activeCat, setActiveCat] = useState<string | null>(null)
   useEffect(() => {
     if (stacked) setActiveCat(null)
@@ -570,20 +505,19 @@ export function SyncMap({ model, onSelect }: { model: SyncMapModel } & SelectPro
 
   return (
     <div className="flex flex-col gap-3">
-      <div ref={containerRef} className="relative grid grid-cols-[1fr_56px_1.35fr_56px_1fr] items-start gap-0">
-        <Connectors container={containerRef} activeCat={activeCat} />
-        {left ? <TargetColumn panel={left} onSelect={onSelect} /> : <div />}
+      <div className="relative grid grid-cols-[1fr_56px_1.35fr_56px_1fr] items-start gap-0">
+        {left ? <TargetColumn panel={left} activeCat={activeCat} onSelect={onSelect} /> : <div />}
         <LaneCol lane={laneFor(left?.target)} toward="right" vertical={false} summary={model.mode === 'bootstrap'} onSelect={onSelect} />
         <SourceColumn model={model} onSelect={onSelect} onTrace={setActiveCat} />
         <LaneCol lane={laneFor(right?.target)} toward="left" vertical={false} summary={model.mode === 'bootstrap'} onSelect={onSelect} />
-        {right ? <TargetColumn panel={right} onSelect={onSelect} /> : <div />}
+        {right ? <TargetColumn panel={right} activeCat={activeCat} onSelect={onSelect} /> : <div />}
       </div>
       {overflow.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
           {overflow.map((p) => (
             <div key={p.target} className="flex flex-col gap-1">
               <LaneCol lane={laneFor(p.target)} toward="right" vertical summary={model.mode === 'bootstrap'} onSelect={onSelect} />
-              <TargetColumn panel={p} onSelect={onSelect} />
+              <TargetColumn panel={p} activeCat={activeCat} onSelect={onSelect} />
             </div>
           ))}
         </div>

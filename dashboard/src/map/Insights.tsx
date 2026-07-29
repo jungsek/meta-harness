@@ -1,13 +1,13 @@
 /**
- * The insights panel — ONE surface for "what is the state and what do I do":
- * the computed verdict sentence as its header, then the detail lines behind
- * two tabs (needs action / notes). Replaces the separate verdict line +
- * console strip, which read as two disconnected components.
+ * The verdict header — "what is the state and what do I do", as the page
+ * headline rather than a boxed sibling of the map. The map is the main
+ * surface; this is one sentence above it, with the detail lines (needs
+ * action / notes) folded behind a single disclosure.
  */
 import * as React from 'react'
 import type { ConsoleLine, SyncMapModel } from '@/lib/derive'
 import { cn } from '@/lib/util'
-import { SegmentedList, SegmentedTrigger, Tabs, TabsContent } from '@/components/ui'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui'
 import { CopyChip } from '@/map/Drawer'
 
 function Row({ line }: { line: ConsoleLine }) {
@@ -28,28 +28,17 @@ function Row({ line }: { line: ConsoleLine }) {
   )
 }
 
-function Lines({ lines, empty }: { lines: ConsoleLine[]; empty: string }) {
-  if (lines.length === 0) return <p className="px-2 py-2 text-label text-muted">{empty}</p>
-  return (
-    <ul className="divide-y divide-line/50">
-      {lines.map((line) => (
-        <Row key={line.key} line={line} />
-      ))}
-    </ul>
-  )
-}
-
 export function Insights({ model, rescanning }: { model: SyncMapModel; rescanning: boolean }) {
   const { verdict } = model
   const actions = model.console.filter((l) => l.severity === 'action')
   const notes = model.console.filter((l) => l.severity !== 'action')
-  const [tab, setTab] = React.useState(actions.length > 0 ? 'actions' : 'notes')
-  // A poll can surface the first action after mount — pull the tab over once.
+  const [open, setOpen] = React.useState(actions.length > 0)
+  // A poll can surface the first action after mount — pull the details open once.
   const sawActions = React.useRef(actions.length > 0)
   React.useEffect(() => {
     if (actions.length > 0 && !sawActions.current) {
       sawActions.current = true
-      setTab('actions')
+      setOpen(true)
     }
   }, [actions.length])
 
@@ -57,10 +46,8 @@ export function Insights({ model, rescanning }: { model: SyncMapModel; rescannin
     verdict.tone === 'ok' ? 'text-status-clean' : verdict.tone === 'action' ? 'text-ink' : 'text-status-conflict'
 
   return (
-    <section className="mh-frame p-3 pt-4" aria-label="status and next steps">
-      <span className="mh-frame-title">status</span>
-
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 px-2 pb-1">
+    <section aria-label="status and next steps">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 px-1">
         <span aria-hidden="true" className={cn('mh-caret font-mono text-verdict font-semibold', rescanning && 'mh-breathe')}>
           ❯
         </span>
@@ -69,24 +56,31 @@ export function Insights({ model, rescanning }: { model: SyncMapModel; rescannin
       </div>
 
       {model.console.length > 0 ? (
-        <Tabs value={tab} onValueChange={setTab} className="mt-2 border-t border-line/70 pt-2">
-          <SegmentedList aria-label="detail" className="mx-2">
-            <SegmentedTrigger value="actions" className="font-mono text-micro">
-              needs action
-              {actions.length > 0 ? <span className="ml-1.5 text-status-conflict">{actions.length}</span> : null}
-            </SegmentedTrigger>
-            <SegmentedTrigger value="notes" className="font-mono text-micro">
-              notes
-              {notes.length > 0 ? <span className="ml-1.5 text-muted">{notes.length}</span> : null}
-            </SegmentedTrigger>
-          </SegmentedList>
-          <TabsContent value="actions" className="mt-1">
-            <Lines lines={actions} empty="Nothing needs your hand." />
-          </TabsContent>
-          <TabsContent value="notes" className="mt-1">
-            <Lines lines={notes} empty="No notes right now." />
-          </TabsContent>
-        </Tabs>
+        <Collapsible open={open} onOpenChange={setOpen} className="mt-1 pl-1">
+          <CollapsibleTrigger
+            className={cn(
+              'flex items-center gap-2 rounded-[4px] px-2 py-1 font-mono text-micro text-muted',
+              'hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            )}
+          >
+            <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+            {actions.length > 0 ? (
+              <span>
+                <span className="text-status-conflict">{actions.length} need action</span>
+                {notes.length > 0 && ` · ${notes.length} notes`}
+              </span>
+            ) : (
+              <span>{notes.length} notes</span>
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mh-rise">
+            <ul className="ml-2 divide-y divide-line/50 border-l border-line pl-1">
+              {[...actions, ...notes].map((line) => (
+                <Row key={line.key} line={line} />
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
     </section>
   )

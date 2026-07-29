@@ -92,10 +92,13 @@ async function main() {
       }
     })
     await check('2d lane arrow SVG', async () => assert.ok(await visible(page.locator('svg').filter({ has: page.locator('line.mh-lane-arrow') })), 'no lane arrow SVG rendered'))
-    // v2.1: verdict + console merged into one insights panel with tabs.
-    await check('2e insights panel with action tabs', async () => {
-      assert.ok(await visible(page.locator('[aria-label="status and next steps"]')), 'insights panel missing')
-      assert.ok(await visible(page.getByRole('tab', { name: /needs action/i })), 'needs-action tab missing')
+    // v2.2: verdict headline + one details disclosure (need action / notes).
+    await check('2e verdict header with details disclosure', async () => {
+      assert.ok(await visible(page.locator('[aria-label="status and next steps"]')), 'verdict header missing')
+      assert.ok(
+        await visible(page.locator('[aria-label="status and next steps"] button', { hasText: /need action|notes/i })),
+        'details disclosure missing',
+      )
     })
     await check('2f no v1 Overview/Targets rail tabs', async () => {
       const tabs = await page.locator('[role="tab"]').allTextContents()
