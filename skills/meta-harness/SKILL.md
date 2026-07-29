@@ -1,22 +1,27 @@
 ---
 name: meta-harness
 description: >-
-  Build, change, and audit a project's coding-agent harness — the rules,
-  subagents, slash commands, MCP servers, hooks, and permissions that configure
-  Claude Code, Codex CLI, Cursor, OpenCode, and Hermes — from one
-  source directory that compiles to all of them. Use this skill whenever
-  someone wants to set up or change how agents behave in a repo — "build my
+  One setup, every coding agent: import the harness a repo already has
+  (.claude/, .codex/) into one source directory and keep every agent in sync
+  with it — then build on or change it there. Covers the rules, subagents,
+  slash commands, MCP servers, hooks and permissions that configure Claude Code
+  and Codex CLI. Use this skill whenever someone wants their setup in another
+  agent ("get my Claude config into Codex"), wants .claude and .codex kept in
+  sync, or wants to set up or change how agents behave in a repo — "build my
   harness", adding or editing rules/subagents/commands/hooks/MCP servers,
-  making agents stop before risky operations, keeping .claude and .codex in
-  sync, reviewing whether their agent config is any good, or fixing config
-  drift — even if they never say "meta-harness" and even if they only name one
-  tool ("add a Claude subagent", "set up Codex for this repo").
+  making agents stop before risky operations, reviewing whether their agent
+  config is any good, or fixing config drift — even if they never say
+  "meta-harness" and even if they only name one tool ("add a Claude subagent",
+  "set up Codex for this repo").
 ---
 
 # meta-harness
 
-meta-harness compiles one source directory into every coding agent's native
-config. You write the source; the CLI writes every output.
+meta-harness gives one repo one agent setup. `meta-harness sync` imports the
+native config that already exists (.claude/, .codex/) into one source directory
+and emits it to every enabled target, both directions — start there unless the
+repo has nothing yet. You (or the user) write the source; the CLI writes every
+output.
 
 - **`<sourceDir>/`** (default `.meta-harness/`, set by `sourceDir` in `meta-harness.jsonc`) — the source of truth. Yours to edit.
 - **`.claude/ .codex/ .cursor/ .opencode/ .hermes/ .mcp.json opencode.json`** — compiled outputs. Editing these by hand is what the tool exists to prevent: `generate` refuses to overwrite hand edits, so a change made there blocks the next build instead of surviving it. Put the change in the source and it reaches every tool at once.

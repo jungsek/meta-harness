@@ -4,7 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "One-way config compiler: single source-of-truth directory → native project config for Claude Code, Codex CLI, Cursor, OpenCode, Hermes Agent, and the .agents standard",
+  "description": "One setup, every coding agent — import your Claude Code config into Codex (and back) and keep them in sync from one source of truth",
   "type": "module",
   "bin": {
     "meta-harness": "bin/meta-harness.js"

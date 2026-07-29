@@ -2,9 +2,10 @@
 name: mh-generate
 description: >-
   Run a meta-harness generate: compile the source dir into every target's
-  native config. Use when the user explicitly invokes mh-generate, or asks to
-  regenerate/rebuild/recompile their agent config after editing source files.
-  For pulling native edits back in, use mh-sync instead.
+  native config, with no import step. Use when the user explicitly invokes
+  mh-generate, or asks to regenerate/rebuild/recompile their agent config after
+  editing source files. mh-sync is the usual entry point — prefer it whenever
+  native config may also have changed, since generate never pulls edits back.
 ---
 
 # mh-generate
