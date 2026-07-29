@@ -6,7 +6,7 @@ description: >-
   (apply / selective / record-as-deliberate), plus a quality pass over the
   harness content. Use when the user explicitly invokes mh-audit, asks to
   audit their harness, or wants drift explained and resolved rather than
-  just applied.
+  just applied. mh-sync is the fast path; this is the diagnosis-first one.
 ---
 
 # mh-audit

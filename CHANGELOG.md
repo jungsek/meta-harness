@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.21.0 — 2026-07-29
+
+- **Repositioned around sync: one setup, every coding agent.** The offer is
+  the sunk cost you already paid — months of teaching Claude Code how you
+  work — moved into whatever agent ships the better model next. V1 promise
+  is exactly Claude Code ⇄ Codex, both directions, whole setup, one source
+  of truth. README, `--help`, `package.json` description and the skill
+  descriptions all lead with `sync`; `init`/`generate` moved to a "starting
+  fresh / power use" grouping. `mh-sync` is documented as the primary agent
+  entry point, the `meta-harness` brain skill leads with import/sync and
+  building-from-scratch second.
+- **Default targets are the pair.** claude + codex enable by default
+  everywhere; a detected cursor/opencode/hermes signal no longer
+  auto-enables anything — it prints one dim FYI line naming how to opt in.
+  Their emitters still ship (experimental, one-way, generate-only) and are
+  a README footnote rather than a headline. Explicit `--targets` and
+  existing `meta-harness.jsonc` files keep working for all five.
+- **A non-definition file in a managed dir no longer blocks a sync.** A
+  `.claude/agents/README.md` is reported as `skipped … left in place`,
+  never imported and never deleted, instead of stopping the run as an
+  unresolvable item. True data-loss items stay fatal.
+- **The first five minutes.** Every flow walked as a fresh user and the
+  output reworked: the bootstrap headline names the import source, the
+  source dir and the emit targets; trust-gate steps are a `next:` block on
+  the first run instead of warn-stream noise (and the warnings they replace
+  are deduped); `sync --dry-run` says it wrote nothing and names the apply
+  command; conflicts print the plan first and the two exits last, once,
+  with no `--prefer` echo; a resolved run says which side it kept; `sync`
+  in an empty repo says "nothing to import here" and points at `init`
+  rather than failing with "source dir not found"; `generate` and `status`
+  offer `sync` first (it keeps hand edits) and `--force` last with its cost
+  stated; `uninstall --check` says nothing was removed and names what git
+  restores; the five skill installs on a cold start print one line each
+  instead of ~200 lines of installer output that buried the sync result.
+
 ## 0.20.0 — 2026-07-28
 
 - **Every CLI capability now has an agent entry point.** Four thin skills —

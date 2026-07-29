@@ -1,10 +1,10 @@
 ---
 name: mh-status
 description: >-
-  Quick meta-harness health check: are the generated configs clean, drifted,
-  or missing, and is anything pending a sync. Use when the user explicitly
-  invokes mh-status or asks "is my harness clean / in sync / healthy" and
-  wants a readout, not a fix.
+  Quick meta-harness health check: are the agents still in sync — configs
+  clean, drifted, or missing, and is anything pending a sync. Use when the user
+  explicitly invokes mh-status or asks "is my harness clean / in sync /
+  healthy" and wants a readout, not a fix; mh-sync is what fixes it.
 ---
 
 # mh-status

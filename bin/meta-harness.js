@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
-import { detectTargets, detectedNames } from '../src/detect.js'
+import { detectTargets, splitDetected } from '../src/detect.js'
 import { DEFAULT_TARGETS, generate, loadConfig, status, uninstall } from '../src/engine.js'
 import { CATEGORIES, TARGETS, explain, explainTarget } from '../src/explain.js'
 import { loadModel } from '../src/model.js'
@@ -28,19 +28,26 @@ const bold = paint('1')
 
 program
   .name('meta-harness')
-  .description('your agent setup, in every agent — one source dir, kept in sync with native config')
+  .description('one setup, every coding agent — import your Claude Code config into Codex (and back), one source of truth')
   .version(pkg.version, '-v, --version')
   .addHelpText(
     'after',
     `
-Examples:
-  meta-harness sync                          reconcile native config ↔ source, emit to every target
-  meta-harness sync --dry-run                preview the plan, write nothing
-  meta-harness init                          scaffold .meta-harness/ with commented examples
-  meta-harness generate                      compile for all enabled targets
-  meta-harness generate --check              CI drift gate (exit 1 if stale or hand-edited)
-  meta-harness generate -t cursor --only rules   partial run (never prunes)
-  meta-harness status                        per-output: clean / EDITED / MISSING`
+Start here:
+  meta-harness sync              import your Claude Code setup into Codex — and back
+  meta-harness sync --dry-run    preview the plan, write nothing
+  meta-harness status            is everything still in sync?
+
+  Keep editing whichever tool you live in and run sync again whenever you like:
+  hand edits fold back into the source and reach every other agent.
+
+Starting fresh / power use:
+  meta-harness init              scaffold .meta-harness/ + the agent skills, nothing imported
+  meta-harness generate          compile the source, no import step
+  meta-harness generate --check  CI drift gate (exit 1 if stale or hand-edited)
+
+Targets default to claude and codex. cursor, opencode and hermes are
+experimental and one-way — enable them with --targets or meta-harness.jsonc.`
   )
 
 const csv = (v) => v.split(',').map((s) => s.trim()).filter(Boolean)
@@ -73,7 +80,7 @@ function renderConflictValue(label, value, dim) {
   return lines
 }
 
-function renderSyncPlan(plan, c) {
+function renderSyncPlan(plan, c, prefer) {
   const { dim, bold, yellow, red, green } = c
   const lines = [bold('sync plan')]
 
@@ -83,14 +90,19 @@ function renderSyncPlan(plan, c) {
       items.forEach((item, i) => {
         const mark = item.kind === 'new' ? green('+') : item.kind === 'removed' ? red('-') : yellow('~')
         const label = (i === 0 ? target : '').padEnd(8)
-        const detail = item.detail ? ` ${dim(`(${item.detail})`)}` : ''
+        // In bootstrap every single item is "(unmanaged)" — a column of the same
+        // word teaches nothing on the one run that matters most.
+        const detail = item.detail && plan.mode !== 'bootstrap' ? ` ${dim(`(${item.detail})`)}` : ''
         lines.push(`    ${label} ${String(item.category ?? '').padEnd(12)} ${mark} ${item.name}${detail}`)
       })
     }
   }
 
   if (plan.conflicts?.length) {
-    lines.push(`  ${red('!')} conflicts`)
+    // With --prefer the run continues, so the header has to say the
+    // conflicts were settled — a bare "! conflicts" above a "✔ synced" reads
+    // like something was ignored.
+    lines.push(`  ${red('!')} conflicts${prefer ? dim(` — resolved with --prefer ${prefer}: kept the ${prefer} side`) : ''}`)
     for (const cf of plan.conflicts) {
       const fatalNote = cf.fatal ? ` ${red('(fatal — no --prefer resolves this)')}` : ''
       lines.push(`    ${cf.target.padEnd(8)} ${cf.category}/${cf.name}${fatalNote}`)
@@ -104,12 +116,23 @@ function renderSyncPlan(plan, c) {
         lines.push(...renderConflictValue('native', cf.native, dim))
       }
     }
-    if (plan.conflicts.some((cf) => !cf.fatal)) lines.push(`    ${dim('resolve with --prefer native|source')}`)
+    // The remedy is printed once, under the plan (see syncStopped) — repeating
+    // it here made every conflict run say --prefer twice.
   }
 
-  if (plan.unsupported?.length) {
+  // Files inside a managed dir that aren't definitions (a README in
+  // .claude/agents/) are left alone, not imported and not deleted. Reported so
+  // the user knows they were seen — never as a failure.
+  const skipped = [...(plan.skipped ?? []), ...(plan.unsupported ?? []).filter((u) => u.skipped)]
+  if (skipped.length) {
+    lines.push(`  ${dim('-')} skipped`)
+    for (const s of skipped) lines.push(`    ${dim(`${s.path ?? s.name}  ${s.reason ?? 'not a definition — left in place'}`)}`)
+  }
+
+  const unsupported = (plan.unsupported ?? []).filter((u) => !u.skipped)
+  if (unsupported.length) {
     lines.push(`  ${yellow('?')} unsupported`)
-    for (const u of plan.unsupported) {
+    for (const u of unsupported) {
       const mark = u.fatal ? red('!') : dim('·')
       lines.push(`    ${mark} ${u.target.padEnd(8)} ${u.path}  ${dim(u.reason)}`)
     }
@@ -126,7 +149,9 @@ function renderSyncPlan(plan, c) {
   if (plan.clean?.length) {
     lines.push(`  = clean`)
     for (const [target, items] of groupByTarget(plan.clean)) {
-      const names = items.map((i) => (typeof i === 'string' ? i : (i.category ?? i.name))).join(' ')
+      // A per-category roll-up, so two clean permissions entries read as
+      // "permissions", not "permissions permissions".
+      const names = [...new Set(items.map((i) => (typeof i === 'string' ? i : (i.category ?? i.name))))].join(' ')
       lines.push(`    ${dim(target.padEnd(8))} ${dim(names)}`)
     }
   }
@@ -145,15 +170,143 @@ function planForJson(plan) {
 }
 
 // 'shared' is a file-ownership label (AGENTS.md/CLAUDE.md/.mcp.json), not a
-// target a user recognizes — excluded from the headline's target list.
-function bootstrapBanner(plan, bold) {
-  const found = [...new Set((plan.imports ?? []).map((i) => i.target))].filter((t) => t !== 'shared')
-  console.log(bold(`no source dir — importing from ${found.length ? found.join(', ') : 'detected targets'} and building one`))
+// target a user recognizes — excluded from both target lists in the headline.
+const realTargets = (items) => [...new Set((items ?? []).map((i) => i.target))].filter((t) => t && t !== 'shared')
+
+function bootstrapBanner(plan, cfg, bold, dim) {
+  const from = realTargets(plan.imports)
+  const to = realTargets(plan.generates)
+  const src = cfg.sourceDir
+  console.log(
+    bold(
+      `importing your ${from.length ? from.join(' + ') : 'existing'} setup → building ${src}/ → emitting ${to.length ? to.join(', ') : 'every target'}`
+    )
+  )
+  console.log(dim(`${src}/ becomes the source of truth; every target is generated from it.\n`))
+}
+
+// Neither tool reads project config until you have accepted its trust prompt —
+// the single most common "I ran it and nothing happened". Printed as steps,
+// not as warnings buried in a warn: stream. Only steps that apply to what was
+// actually emitted: telling someone to accept /hooks when no hooks.json was
+// written sends them looking for a prompt about nothing.
+function trustSteps(target, emittedPaths) {
+  if (target === 'claude') return ['open claude here, accept the folder-trust prompt — project settings, hooks and permissions load after it']
+  if (target !== 'codex') return []
+  const gated = emittedPaths.some((p) => p === '.codex/hooks.json' || p.startsWith('.codex/rules/'))
+  return [
+    'open codex here, accept the directory-trust prompt',
+    ...(gated ? ['then run /hooks and accept — until you do, hooks and deny rules quietly do nothing'] : []),
+  ]
+}
+
+// The trust warnings the next: block now says better. Matched narrowly (codex
+// prefix + trust wording) so any other codex warning still prints.
+const coveredByNext = (w, targets) => targets.some((t) => w.startsWith(`${t}: `)) && /trust/.test(w)
+
+function printWarnings(warnings, targets, yellow) {
+  for (const w of new Set(warnings ?? [])) if (!coveredByNext(w, targets)) console.warn(yellow(`warn: ${w}`))
+}
+
+function printNext(targets, emittedPaths, { bold, dim }) {
+  const steps = targets.map((t) => [t, trustSteps(t, emittedPaths)]).filter(([, s]) => s.length)
+  if (!steps.length) return
+  console.log(`\n${bold('next:')}`)
+  for (const [t, [first, ...rest]] of steps) {
+    console.log(`  ${bold(t.padEnd(7))} ${first}`)
+    for (const r of rest) console.log(`  ${' '.repeat(7)} ${r}`)
+  }
+  console.log(`  ${dim('then    keep editing whichever tool you live in — run `meta-harness sync` again to fold it back')}`)
+}
+
+// A conflict is a fork, not a dead end: both exits are printed, and they are
+// the last thing on screen because that is what the user acts on.
+function syncStopped(conflicts = [], unsupported = [], sourceDir = '.meta-harness') {
+  const resolvable = conflicts.filter((c) => !c.fatal)
+  const stuck = [...conflicts.filter((c) => c.fatal), ...unsupported.filter((u) => u.fatal && !u.skipped)]
+  console.error(red(`\nsync stopped — nothing was written.`))
+  if (resolvable.length) {
+    const n = resolvable.length
+    console.error(`  ${n} item${n > 1 ? 's' : ''} changed in the source AND in the tool (both shown above). Pick a side:`)
+    console.error(`    meta-harness sync --prefer native   ${dim('keep what the tool has now')}`)
+    console.error(`    meta-harness sync --prefer source   ${dim(`keep what ${sourceDir}/ has`)}`)
+    console.error(dim(`  --prefer applies to every conflict in the run; edit ${sourceDir}/ by hand to settle them one at a time.`))
+  }
+  if (stuck.length)
+    console.error(
+      `  ${stuck.length} item${stuck.length > 1 ? 's' : ''} above cannot be translated — leave ${stuck.length > 1 ? 'them' : 'it'} in place (nothing was lost), or move ${stuck.length > 1 ? 'them' : 'it'} out of the file named above and run sync again.`
+    )
+}
+
+// Drift is the refusal people hit first, and --force is the only exit the raw
+// error names. sync is the exit that KEEPS their work, so it leads; --force
+// goes last with its cost stated.
+function driftedRefusal(e, cmd) {
+  const adopting = /did not write/.test(e.message)
+  console.error(
+    red(
+      adopting
+        ? `${cmd} stopped — these files exist already and meta-harness did not write them:`
+        : `${cmd} stopped — these outputs were hand-edited since the last run:`
+    )
+  )
+  for (const p of e.drifted) console.error(`  ${p}`)
+  if (cmd === 'uninstall') {
+    console.error(`\n  keep those edits:  copy the files above out of the repo first ${dim('(uninstall removes them either way)')}`)
+    console.error(`  remove anyway:     meta-harness uninstall --force   ${dim('deletes them along with everything else')}`)
+    return
+  }
+  console.error(
+    `\n  keep those edits:  ${bold('meta-harness sync')}   ${dim(adopting ? 'imports them into the source, then re-emits everywhere' : 'folds them back into the source, then re-emits everywhere')}`
+  )
+  console.error(`  discard them:      meta-harness ${cmd} --force   ${dim('overwrites the files listed above — the edits are gone')}`)
+}
+
+// Detected but deliberately not enabled (V1-FOCUS §1): one dim FYI line, never
+// an emitted tree. The plan carries its own proposed list in bootstrap mode;
+// outside it we ask detection directly.
+function printProposed(root, enabled, planProposed, dim) {
+  const proposed = planProposed ?? splitDetected(detectTargets(root)).proposed
+  const extra = [...new Set(proposed)].filter((t) => !enabled.includes(t))
+  if (extra.length)
+    console.log(dim(`also detected: ${extra.join(', ')} — not enabled (experimental, one-way); add with --targets ${extra.join(',')} or meta-harness.jsonc`))
+}
+
+// F4: nothing to import and no source dir means there is nothing for sync to
+// do — say so instead of falling through to "source dir not found", which
+// blames the user for a repo state sync is supposed to handle.
+//
+// The test is a property of the PLAN, never of the filesystem. An earlier
+// version asked "does a native config dir exist", which a `.claude/` holding
+// only a README answers yes to — the exact state a repo is in right after
+// `uninstall` — so --dry-run printed a plan and told the user to apply it,
+// and the apply then died on the missing source dir. Plan-driven, both paths
+// reach the same verdict by construction.
+const importsNothing = (plan) => !(plan.imports ?? []).length
+
+function printNothingToImport(root, cfg, plan) {
+  const seen = detectTargets(root).flatMap((r) => r.repo)
+  console.log(
+    bold(
+      seen.length
+        ? `nothing to import here — ${seen.join(', ')} holds no agent config meta-harness can read`
+        : 'nothing to import here — no agent config found'
+    )
+  )
+  const skipped = [...(plan.skipped ?? []), ...(plan.unsupported ?? []).filter((u) => u.skipped)]
+  if (skipped.length)
+    console.log(dim(`  (${skipped.map((s) => s.path ?? s.name).join(', ')} — not a definition, left in place)`))
+  console.log(
+    `\nStarting fresh?\n` +
+      `  meta-harness init${dim('        scaffold ' + cfg.sourceDir + '/ with commented examples, install the agent skills')}\n` +
+      `  ${dim('…or ask your coding agent: "build my harness"')}\n\n` +
+      dim(`Already have a setup in another checkout? run sync there — this is a project-scoped tool.`)
+  )
 }
 
 program
   .command('sync')
-  .description('reconcile native agent config ↔ source, emit to every target')
+  .description('start here — import your setup into every agent, both directions')
   .option('--dry-run', 'preview the plan; write nothing')
   .option('--json', 'machine-readable output — mirrors the plan object')
   .option('--prefer <side>', 'resolve conflicts: native or source')
@@ -164,30 +317,71 @@ program
       process.exit(1)
     }
     const syncOpts = { targets: opts.targets ?? null, prefer: opts.prefer ?? null }
+    const cfg = loadConfig(root)
     try {
+      // Only a bootstrap (no source dir yet) can reach the empty-plan state;
+      // in reconcile the source dir exists and generate always has something
+      // to compile. Costs one extra read-only plan on that path alone.
+      if (!fs.existsSync(path.join(root, cfg.sourceDir))) {
+        const plan = syncPlan(root, syncOpts)
+        if (importsNothing(plan)) {
+          if (opts.json)
+            console.log(
+              JSON.stringify(
+                opts.dryRun ? planForJson(plan) : { written: [], pruned: [], warnings: plan.warnings ?? [], plan: planForJson(plan) },
+                null,
+                2
+              )
+            )
+          else printNothingToImport(root, cfg, plan)
+          return
+        }
+      }
       if (opts.dryRun) {
         const plan = syncPlan(root, syncOpts)
         if (opts.json) console.log(JSON.stringify(planForJson(plan), null, 2))
         else {
-          if (plan.mode === 'bootstrap') bootstrapBanner(plan, bold)
+          if (plan.mode === 'bootstrap') bootstrapBanner(plan, cfg, bold, dim)
           console.log(renderSyncPlan(plan, { dim, bold, yellow, red, green }))
-          for (const w of new Set(plan.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
+          const emitted = realTargets(plan.generates)
+          // No next: block on a preview, so the trust warnings it would have
+          // replaced still have to be said.
+          printWarnings(plan.warnings, [], yellow)
+          printProposed(root, emitted, plan.proposed, dim)
+          if (plan.conflicts?.length) syncStopped(plan.conflicts, plan.unsupported ?? [], cfg.sourceDir)
+          else console.log(dim('\nnothing written (--dry-run) — run `meta-harness sync` to apply this plan'))
         }
         if (plan.conflicts?.length) process.exit(1)
       } else {
         const res = syncApply(root, syncOpts)
         if (opts.json) console.log(JSON.stringify({ ...res, plan: planForJson(res.plan) }, null, 2))
         else {
-          if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, bold)
-          console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }))
-          for (const w of new Set(res.warnings ?? [])) console.warn(yellow(`warn: ${w}`))
-          console.log(`${green('✔')} synced — ${(res.written ?? []).length} written · ${(res.pruned ?? []).length} pruned`)
+          if (res.plan?.mode === 'bootstrap') bootstrapBanner(res.plan, cfg, bold, dim)
+          console.log(renderSyncPlan(res.plan, { dim, bold, yellow, red, green }, opts.prefer))
+          const emitted = realTargets(res.plan?.generates)
+          const written = res.written ?? []
+          // The next: block only prints on a first run; only then may the
+          // warnings it restates be suppressed.
+          const showNext = res.plan?.mode === 'bootstrap' && written.length > 0
+          printWarnings(res.warnings, showNext ? emitted : [], yellow)
+          printProposed(root, emitted, res.plan?.proposed, dim)
+          console.log(
+            `${green('✔')} synced — ${written.length} file${written.length === 1 ? '' : 's'} written` +
+              ((res.pruned ?? []).length ? ` · ${res.pruned.length} pruned` : '')
+          )
           // Cold-start story: a bootstrap sync should leave the agent skills
           // installed too, same as init. Best-effort — a failed install never
           // fails the sync.
-          if (res.plan?.mode === 'bootstrap')
-            for (const s of ['meta-harness', 'mh-sync', 'mh-generate', 'mh-status', 'mh-audit'])
-              if (!fs.existsSync(path.join(root, `.agents/skills/${s}`))) installSkill(s)
+          if (res.plan?.mode === 'bootstrap') {
+            const missing = ['meta-harness', 'mh-sync', 'mh-generate', 'mh-status', 'mh-audit'].filter(
+              (s) => !fs.existsSync(path.join(root, `.agents/skills/${s}`))
+            )
+            if (missing.length) console.log(dim('  adding the agent skills — /mh-sync /mh-status /mh-audit in Claude, $-prefixed in Codex'))
+            for (const s of missing) installSkill(s)
+          }
+          // Trust prompts are a first-run story. Repeating them on every routine
+          // sync trains people to skim the block that matters once.
+          if (showNext) printNext(emitted, (res.plan?.generates ?? []).map((g) => (typeof g === 'string' ? g : (g.path ?? ''))), { bold, dim })
         }
       }
     } catch (e) {
@@ -198,8 +392,10 @@ program
         if (opts.json)
           console.log(JSON.stringify({ error: e.message, conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, null, 2))
         else {
-          console.error(red(e.message))
+          // Plan first, verdict last: the last line on screen is the one the
+          // user acts on, so it has to be the remedy, not the header.
           console.log(renderSyncPlan({ conflicts: e.conflicts, unsupported: e.unsupported ?? [] }, { dim, bold, yellow, red, green }))
+          syncStopped(e.conflicts, e.unsupported ?? [], cfg.sourceDir)
         }
         process.exit(1)
       }
@@ -211,7 +407,7 @@ program
 
 program
   .command('generate')
-  .description('compile the source dir into native harness config')
+  .description('compile the source dir into native config (no import step)')
   .option('--check', 'dry-run; exit 1 if outputs are stale or drifted')
   .option('--dry-run', 'alias of --check without the exit code')
   .option('--force', 'discard hand-edits to generated outputs')
@@ -241,6 +437,7 @@ program
       }
     } catch (e) {
       if (opts.json) console.log(JSON.stringify({ error: e.message, drifted: e.drifted ?? [] }))
+      else if (e.drifted?.length) driftedRefusal(e, 'generate')
       else console.error(red(e.message))
       process.exit(1)
     }
@@ -248,26 +445,29 @@ program
 
 program
   .command('status')
-  .description('manifest vs disk: clean / EDITED / MISSING per output')
+  .description('is everything still in sync? clean / EDITED / MISSING per output')
   .option('--json', 'machine-readable output')
   .action((opts) => {
     const rows = status(root)
     const bad = rows.filter((r) => r.state !== 'clean' && r.state !== 'link')
     if (opts.json) console.log(JSON.stringify(rows, null, 2))
-    else if (rows.length === 0) console.log('no manifest — run: meta-harness generate')
+    else if (rows.length === 0) console.log(`no harness here yet — run: ${bold('meta-harness sync')} (imports what you already have) or meta-harness init`)
     else {
       for (const r of rows) {
         const color = r.state === 'clean' ? dim : r.state === 'link' ? dim : red
         console.log(`  ${color(r.state.padEnd(8))} ${r.path}`)
       }
+      // "link" is the one state whose name doesn't explain itself.
+      if (rows.some((r) => r.state === 'link')) console.log(dim('  link = symlinked to the source file (identical bytes)'))
       if (!bad.length) console.log(green(`✔ all clean (${rows.length} outputs)`))
       else {
         const edited = bad.filter((r) => r.state === 'EDITED').length
-        // MISSING just needs a rebuild; EDITED means someone's work is at stake.
+        // MISSING just needs a rebuild; EDITED means someone's work is at stake
+        // — sync keeps it, so sync is what we name.
         const fix = edited
-          ? 'port those changes into the source, then: meta-harness generate --force'
+          ? `keep those edits: ${bold('meta-harness sync')} (folds them back into the source)`
           : 'rebuild them: meta-harness generate'
-        console.log(red(`✘ ${bad.length} of ${rows.length} outputs need attention — ${fix}`))
+        console.log(red(`✘ ${bad.length} of ${rows.length} outputs need attention`) + ` — ${fix}`)
       }
     }
     if (bad.length) process.exit(1)
@@ -289,12 +489,21 @@ program
 function installSkill(name) {
   const repo = (pkg.repository?.url ?? '').replace(/^git\+|\.git$/g, '').replace(/^https:\/\/github\.com\//, '')
   if (!repo) return false
-  console.log(dim(`installing the ${name} skill via: npx skills add ${repo} --skill ${name}`))
+  // `skills add` prints a full-screen installer report per skill. Five of those
+  // buried the sync result that the user actually ran the command for — so it
+  // is captured, and only the one-line outcome is shown (stderr surfaces on
+  // failure, where the detail matters).
+  process.stdout.write(dim(`  installing skill ${name} …`))
   const r = spawnSync('npx', ['-y', 'skills', 'add', repo, '--skill', name, '-y'], {
     cwd: root,
-    stdio: 'inherit',
+    encoding: 'utf8',
   })
-  if (r.status !== 0) return false
+  if (r.status !== 0) {
+    console.log(red(' failed'))
+    if (r.stderr) console.error(dim(r.stderr.trim().split('\n').slice(-3).join('\n')))
+    return false
+  }
+  console.log(green(' ✔'))
   // `skills add` mirrors a skill into .claude/skills/ only when it detects a
   // Claude agent driving the terminal — from Codex, a plain shell, or CI it
   // writes .agents/skills/ alone, which Claude Code does not read. Ensure the
@@ -305,14 +514,13 @@ function installSkill(name) {
   if (fs.existsSync(skillDir) && !fs.existsSync(mirror)) {
     fs.mkdirSync(path.dirname(mirror), { recursive: true })
     fs.symlinkSync(path.relative(path.dirname(mirror), skillDir), mirror)
-    console.log(dim(`linked .claude/skills/${name} → .agents/skills/${name} (Claude does not read .agents)`))
   }
   return r.status === 0
 }
 
 program
   .command('show')
-  .description('what this harness contains, read from the source (always accurate)')
+  .description('what this harness contains, read from the source')
   .action(() => {
     const cfg = loadConfig(root)
     try {
@@ -326,7 +534,7 @@ program
 program
   .command('explain')
   .argument('[name]', 'a category (rules, agents, hooks, …) or a target (claude, codex, cursor, …)')
-  .description('print the source file shape for a category, or the managed surfaces + measured nuances for a target')
+  .description('the source shape of a category, or a target\'s manual')
   .action((name) => {
     if (!name) {
       console.log('categories:')
@@ -348,7 +556,7 @@ program
 
 program
   .command('init')
-  .description('scaffold the source dir + config, install the agent skill (idempotent)')
+  .description('starting from scratch: scaffold the source dir + agent skills')
   .option('--no-skill', 'skip installing the agent skill (no network calls)')
   .option('-t, --targets <names>', 'targets to write into the config (skips detection)', csv)
   .action((opts) => {
@@ -370,15 +578,19 @@ program
       let chosen = opts.targets ?? null
       if (!chosen) {
         const rows = detectTargets(root)
-        const found = detectedNames(rows)
+        // Only claude/codex auto-enable (V1-FOCUS §1); anything else detected is
+        // proposed in one line, never written into the config behind your back.
+        const { enabled, proposed } = splitDetected(rows)
         console.log('detecting targets…')
         for (const r of rows) {
+          if (!DEFAULT_TARGETS.includes(r.target)) continue
           const evidence = [...r.repo.map((p) => `${p} in repo`), ...(r.bin ? [`${r.bin} on PATH`] : [])]
           const hit = evidence.length > 0
           console.log(`  ${(hit ? green('✔') : dim('—'))} ${r.target.padEnd(9)} ${hit ? evidence.join(' · ') : dim('nothing found')}`)
         }
-        chosen = found.length ? found : cfg.targets
-        if (!found.length) console.log(dim(`  nothing detected — defaulting to ${cfg.targets.join(', ')}`))
+        chosen = enabled.length ? enabled : cfg.targets
+        if (!enabled.length) console.log(dim(`  nothing detected — defaulting to ${cfg.targets.join(', ')}`))
+        printProposed(root, chosen, proposed, dim)
       }
       fs.writeFileSync(
         cfgPath,
@@ -404,7 +616,7 @@ program
       `\n${bold('next — pick a path:')}\n\n` +
         `  ${bold('by hand')}\n` +
         `    edit ${cfg.sourceDir}/ (every file is a commented example), then: meta-harness generate\n\n` +
-        `  ${bold('by agent')}${skilled ? '' : dim('  (needs the skill above)')}\n` +
+        `  ${bold('by agent')}${skilled ? '' : dim('  (skills not installed — npx skills add jungsek/meta-harness)')}\n` +
         `    ask any coding agent: "build my harness"\n` +
         `    ...with your requirements inline: "build my harness — claude and codex, stop before payments"\n` +
         `    ...or sketch it in ${cfg.sourceDir}/HARNESS-INIT.md first and let it build from that\n` +
@@ -424,7 +636,7 @@ program
 
 program
   .command('uninstall')
-  .description('remove every trace: outputs, source dir, config, installed skill (your prose and foreign keys survive)')
+  .description('remove every trace: outputs, source dir, config, skills')
   .option('--force', 'discard hand-edits to generated outputs')
   .option('--check', 'dry-run; list what would be removed')
   .option('--json', 'machine-readable output')
@@ -438,9 +650,16 @@ program
         const verb = opts.check ? 'would remove' : 'removed'
         for (const p of res.pruned) console.log(`  ${red(verb.padEnd(12))} ${p}`)
         console.log(`${green('✔')} ${res.pruned.length} ${verb}`)
+        // Everything above is managed output — including config adopted from
+        // the user's original setup on the first sync. Say so once: git is the
+        // only way back, and nobody expects to need it after "uninstall".
+        if (res.pruned.length)
+          console.log(dim('  that includes config adopted from your original setup — `git checkout .` brings it back if you want it'))
+        if (opts.check) console.log(dim('  nothing removed (--check) — run `meta-harness uninstall` to do it'))
       }
     } catch (e) {
       if (opts.json) console.log(JSON.stringify({ error: e.message, drifted: e.drifted ?? [] }))
+      else if (e.drifted?.length) driftedRefusal(e, 'uninstall')
       else console.error(red(e.message))
       process.exit(1)
     }

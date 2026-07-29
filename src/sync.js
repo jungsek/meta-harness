@@ -26,12 +26,13 @@ import os from 'node:os'
 import path from 'node:path'
 import matter from 'gray-matter'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { detectTargets, detectedNames } from './detect.js'
-import { discover, generate, loadConfig, loadManifest } from './engine.js'
+import { detectTargets, splitDetected } from './detect.js'
+import { discover, generate, loadConfig, loadManifest, mergeShared } from './engine.js'
 import { KNOWN_TARGETS } from './model.js'
 import { NAME_OK as CODEX_NAME_OK } from './targets/codex.js'
 import {
   canonicalJson,
+  isDocFile,
   isLink,
   parseJsonc,
   pick,
@@ -223,9 +224,17 @@ function fileItems(ctx, target, { dir, category, ext }) {
       if (!entry) ctx.warnings.push(`${rel}: symlink meta-harness did not write — left alone, not imported`)
       continue
     }
+    // V1-FOCUS §2: mirror listMd's own exclusion (util.js) — a README.md is
+    // never model content on the source side either, so importing it would
+    // silently drop it from the target that had it. Catch it before the
+    // fold, not after: same file, same reason, in every managed dir.
+    if (present && isDocFile(name)) {
+      ctx.unsupported.push({ target, path: rel, skipped: true, reason: 'documentation file, not a definition — left in place' })
+      continue
+    }
+    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
     const exp = ctx.expected.get(rel)
     const expected = exp ? (exp.content ?? readIf(exp.symlinkTo) ?? undefined) : undefined
-    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
     const tracked = Boolean(entry)
     out.push({
       target,
@@ -661,8 +670,14 @@ const ownerOf = (rel) =>
 // report to what sync would actually rewrite instead of the whole surface.
 // (Symlink targets point into the preview dir — rebase them onto the real
 // source before comparing.)
-function wouldChange(root, f, tmp, realSrc) {
-  const abs = path.join(root, f.path)
+// Shared files (.claude/settings.json, .codex/config.toml, …) cannot be
+// compared by owned-key *value* equality alone: generate() writes the
+// mergeShared() bytes, and sortKeys/serialize reformat + reorder even when
+// every owned value is unchanged (adopting a hand-formatted file is the
+// common case this bites). Run the same merge sync would actually apply and
+// compare bytes, or the preview quietly under-reports what apply writes.
+function wouldChange(ctx, f, tmp, realSrc, partial) {
+  const abs = path.join(ctx.root, f.path)
   if (f.symlinkTo) {
     const real = path.join(realSrc, path.relative(tmp, f.symlinkTo))
     return !isLink(abs) || fs.readlinkSync(abs) !== path.relative(path.dirname(abs), real)
@@ -670,14 +685,11 @@ function wouldChange(root, f, tmp, realSrc) {
   const existing = readIf(abs)
   if (existing === null) return true
   if (!f.shared) return existing !== f.content
-  try {
-    return !eq(pick(FORMATS[f.format](existing, f.path), f.keys), pick(f.data, f.keys))
-  } catch {
-    return true
-  }
+  const prevOwned = ctx.manifest.files[f.path]?.ownedKeys
+  return existing !== mergeShared(ctx.root, f, prevOwned, [], partial).content
 }
 
-function previewGenerates(ctx, writes) {
+function previewGenerates(ctx, writes, partial) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-sync-'))
   try {
     const realSrc = path.join(ctx.root, ctx.cfg.sourceDir)
@@ -691,7 +703,7 @@ function previewGenerates(ctx, writes) {
       only: null,
       targetNames: ctx.targetNames,
     })
-    const changed = res.files.filter((f) => wouldChange(ctx.root, f, tmp, realSrc))
+    const changed = res.files.filter((f) => wouldChange(ctx, f, tmp, realSrc, partial))
     return {
       files: res.files,
       generates: changed
@@ -804,7 +816,10 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   const configured = fs.existsSync(path.join(root, 'meta-harness.jsonc'))
   const mode = configured && fs.existsSync(srcDir) ? 'reconcile' : 'bootstrap'
 
-  const detected = detectedNames(detectTargets(root))
+  // V1-FOCUS §1: detection may only auto-enable the claude/codex pair; any
+  // other detected target (cursor/opencode/hermes) is a proposal, surfaced
+  // below, never folded into the enabled set.
+  const { enabled: detected, proposed } = mode === 'bootstrap' ? splitDetected(detectTargets(root)) : { enabled: [], proposed: [] }
   const targetNames = targets ?? (mode === 'bootstrap' ? (detected.length ? detected : cfg.targets) : cfg.targets)
   const enabled = targetNames.includes('*') ? KNOWN_TARGETS : targetNames
 
@@ -888,7 +903,10 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
 
   const folded = foldAll(ctx, toFold)
   for (const c of folded.conflicts) conflicts.push({ ...c, prefer })
-  const preview = previewGenerates(ctx, folded.writes)
+  // Mirrors generate()'s own `partial = only || targets` (syncApply always
+  // calls generate with only unset) — a partial run retains previously-owned
+  // keys from unselected categories instead of dropping them.
+  const preview = previewGenerates(ctx, folded.writes, Boolean(targets))
 
   // A managed output that is simply gone gets recreated by the generate at
   // the end of sync. That restores rather than destroys, so it is not a
@@ -923,13 +941,22 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
     ...lostInTranslation(ctx, toFold, preview.files, conflicts),
   ]
 
+  // The .claude/skills mirror repair is a real write syncApply performs
+  // outside generate() — it must show up here too, or a dry-run predicts
+  // nothing for it and an apply reports a count with no matching plan row.
+  const generates = [
+    ...preview.generates,
+    ...pendingSkillMirrors(root).map((rel) => ({ target: ownerOf(rel), path: rel })),
+  ].sort((a, b) => a.target.localeCompare(b.target) || a.path.localeCompare(b.path))
+
   return {
     mode,
     targets: enabled,
+    proposed,
     imports,
     conflicts,
     unsupported,
-    generates: preview.generates,
+    generates,
     clean,
     warnings: [...ctx.warnings, ...preview.warnings],
     sourceWrites: folded.writes.map(({ path: p, content }) => ({ path: p, content })),
@@ -954,18 +981,27 @@ function scanPaths(ctx) {
 
 // `npx skills add` owns skills dirs; the one thing sync repairs is the
 // .claude/skills mirror, which only gets written when a Claude agent happens
-// to be driving the install (§2).
-function repairSkillMirror(root) {
+// to be driving the install (§2). Split pure-vs-effecting so the plan
+// preview (syncPlan, --dry-run) can predict exactly the paths the real
+// repair (syncApply) creates — same list, not a second guess at it.
+function pendingSkillMirrors(root) {
   const agents = path.join(root, '.agents/skills')
   if (!fs.existsSync(agents)) return []
   const out = []
   for (const name of fs.readdirSync(agents)) {
     const mirror = path.join(root, '.claude/skills', name)
     if (fs.existsSync(mirror) || isLink(mirror)) continue
-    relSymlink(path.join(agents, name), mirror)
     out.push(path.join('.claude/skills', name))
   }
   return out
+}
+
+function repairSkillMirror(root) {
+  const agents = path.join(root, '.agents/skills')
+  return pendingSkillMirrors(root).map((rel) => {
+    relSymlink(path.join(agents, path.basename(rel)), path.join(root, rel))
+    return rel
+  })
 }
 
 // Stage every source write, then commit. Two phases so a failure — full

@@ -76,10 +76,14 @@ test('bootstrap: claude-only repo gains a working codex without questions', () =
   assert.equal(plan.conflicts.length, 0)
   assert.ok(plan.imports.some((i) => i.category === 'connections' && i.name === 'linear' && i.kind === 'new'))
   assert.ok(plan.imports.some((i) => i.category === 'rules' && i.name === 'AGENTS.md'))
-  // generates carries the target so the plan report can group by it (§3)
-  // …and .claude/settings.json is absent: the fold round-trips its owned
-  // keys exactly, so sync has nothing to rewrite on the side it imported from
+  // generates carries the target so the plan report can group by it (§3).
+  // .claude/settings.json IS listed even though the fold round-trips its
+  // owned key *values* exactly: generate() still rewrites the file, because
+  // sortKeys/serialize reformat it into canonical (sorted-key) JSON, which
+  // differs byte-for-byte from the hand-formatted native file it was adopted
+  // from. A plan that omitted it here would under-report what apply writes.
   assert.deepEqual(plan.generates, [
+    { target: 'claude', path: '.claude/settings.json' },
     { target: 'codex', path: '.codex/config.toml' },
     { target: 'codex', path: '.codex/hooks.json' },
     { target: 'codex', path: '.codex/rules/meta-harness.rules' },
@@ -90,6 +94,11 @@ test('bootstrap: claude-only repo gains a working codex without questions', () =
 
   const res = syncApply(root, { targets: TARGETS })
   assert.ok(res.written.includes('.codex/config.toml'))
+  assert.deepEqual(
+    [...plan.generates.map((g) => g.path)].sort(),
+    [...res.written].sort(),
+    'the plan promised exactly what apply wrote — no silent extra writes'
+  )
 
   // source now exists and is the truth
   assert.ok(exists(root, 'meta-harness.jsonc'))
@@ -626,13 +635,31 @@ test('normalizing a flat hook is idempotent', () => {
   assert.equal(read(root, '.meta-harness/hooks/hooks.jsonc'), after, 'no diff')
 })
 
-test('repairs the .claude/skills mirror, never the skill itself', () => {
+// The skill-mirror repair is a real write syncApply performs outside
+// generate() — a dry-run that doesn't predict it, or a plan whose "= clean"
+// disagrees with an apply reporting "N files written", is exactly the kind
+// of drift 904c279 fixed for shared files. Same contract, second path.
+test('repairs the .claude/skills mirror, never the skill itself — predicted by the plan, not just done by apply', () => {
   const root = managed()
   write(root, '.agents/skills/meta-harness/SKILL.md', '# skill\n')
+
+  const plan = syncPlan(root, {})
+  assert.deepEqual(plan.imports, [], 'no other drift in this fixture')
+  assert.ok(
+    plan.generates.some((g) => g.path === '.claude/skills/meta-harness' && g.target === 'claude'),
+    'dry-run predicts the mirror repair'
+  )
+  assert.ok(!exists(root, '.claude/skills/meta-harness'), 'syncPlan never writes')
+
   const res = syncApply(root, {})
   assert.ok(res.written.includes('.claude/skills/meta-harness'))
   assert.equal(read(root, '.claude/skills/meta-harness/SKILL.md'), '# skill\n')
   assert.ok(!exists(root, '.meta-harness/skills'), 'skills dirs are never imported')
+  assert.deepEqual(
+    [...plan.generates.map((g) => g.path)].sort(),
+    [...res.written].sort(),
+    'the plan promised exactly what apply wrote'
+  )
 })
 
 test('unparseable native settings aborts before anything is written', () => {
@@ -658,4 +685,131 @@ test('refuses to force-generate over config it never scanned', () => {
   assert.throws(() => syncApply(root, {}), /cannot import/)
   assert.equal(read(root, '.cursor/commands/ship.md'), 'my own version\n')
   assert.equal(read(root, '.meta-harness/connections/mcp.jsonc'), src, 'refused before the fold — repo untouched')
+})
+
+// V1-FOCUS §2: a README.md sitting in a managed agents/commands dir must
+// never block sync — mirrors listMd's own exclusion (util.js: a README.md is
+// never model content on the source side either), so it is never a
+// candidate for import in the first place.
+test('a README.md in .claude/agents/ is skipped, never blocks, never imported', () => {
+  const root = tmp()
+  write(root, '.claude/agents/README.md', '# Agents\n\nThis dir holds agent definitions.\n')
+  write(root, '.claude/agents/planner.md', '---\ndescription: plans\n---\nYou plan.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.conflicts, [])
+  assert.equal(plan.unsupported.filter((u) => u.fatal).length, 0, 'nothing fatal')
+  const skipped = plan.unsupported.find((u) => u.path === '.claude/agents/README.md')
+  assert.ok(skipped, 'README surfaces once in the plan feed')
+  assert.equal(skipped.skipped, true)
+  assert.ok(!skipped.fatal)
+  assert.ok(!plan.imports.some((i) => i.name === 'README'), 'never treated as an importable item')
+
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.claude/agents/README.md'), '# Agents\n\nThis dir holds agent definitions.\n', 'left in place')
+  assert.ok(!exists(root, '.meta-harness/agents/README.md'), 'never folded into the source')
+  assert.match(read(root, '.meta-harness/agents/planner.md'), /You plan\./, 'the real agent alongside it still imports')
+})
+
+// Same fix, same reason, the other managed dir: a plain-prose command file
+// (Claude slash commands need no frontmatter at all, so "no frontmatter"
+// alone is never a valid skip signal here — only the README.md name is).
+test('a README.md in .claude/commands/ is skipped, never blocks, never imported', () => {
+  const root = tmp()
+  write(root, '.claude/commands/README.md', '# Commands\n\nThis dir holds slash commands.\n')
+  write(root, '.claude/commands/ship.md', 'Ship it.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.conflicts, [])
+  assert.equal(plan.unsupported.filter((u) => u.fatal).length, 0, 'nothing fatal')
+  assert.ok(
+    plan.unsupported.some((u) => u.path === '.claude/commands/README.md' && u.skipped),
+    'README surfaces once in the plan feed'
+  )
+  assert.ok(!plan.imports.some((i) => i.name === 'README'), 'never treated as an importable item')
+
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.claude/commands/README.md'), '# Commands\n\nThis dir holds slash commands.\n', 'left in place')
+  assert.ok(!exists(root, '.meta-harness/commands/README.md'), 'never folded into the source')
+  assert.match(read(root, '.meta-harness/commands/ship.md'), /Ship it\./, 'the real frontmatter-less command still imports')
+})
+
+// A real subagent with no frontmatter at all (just a name, no description)
+// is exactly what loadModel already accepts — it must import like any other
+// agent, not get caught by a README-only exclusion.
+test('a frontmatter-less agent that is not named README.md still imports', () => {
+  const root = tmp()
+  write(root, '.claude/agents/quick-helper.md', '# Quick helper\n\nHelps quickly.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.unsupported, [])
+  assert.ok(plan.imports.some((i) => i.name === 'quick-helper'))
+
+  syncApply(root, { targets: TARGETS })
+  assert.match(read(root, '.meta-harness/agents/quick-helper.md'), /Helps quickly\./)
+  assert.ok(exists(root, '.claude/agents/quick-helper.md'))
+})
+
+test('a non-.toml file in .codex/agents/ is invisible to sync, same as before', () => {
+  const root = tmp()
+  write(root, '.codex/agents/notes.md', 'not a codex agent, just notes\n')
+  write(root, '.codex/agents/planner.toml', `name = "planner"\ndescription = "plans"\ndeveloper_instructions = '''\nYou plan.\n'''\n`)
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(read(root, '.codex/agents/notes.md'), 'not a codex agent, just notes\n', 'left in place, untouched')
+  assert.match(read(root, '.meta-harness/agents/planner.md'), /You plan\./)
+})
+
+test('a real agent with broken frontmatter stays a loud failure, not a silent skip', () => {
+  const root = tmp()
+  write(root, '.claude/agents/broken.md', '---\ndescription: [unterminated\n---\nDoes stuff.\n')
+
+  // Not classified as a non-definition (that path never fires for genuinely
+  // broken frontmatter), so it goes through the normal import path — which
+  // then fails loudly, since the content really can't be modeled as an agent.
+  assert.throws(() => syncApply(root, { targets: TARGETS }), /frontmatter parse failed/)
+  assert.equal(read(root, '.claude/agents/broken.md'), '---\ndescription: [unterminated\n---\nDoes stuff.\n', 'native file untouched')
+})
+
+// The plan is what a user reads before deciding to apply (V1-FOCUS §3) — a
+// plan that lists fewer paths than apply actually writes is a plan that
+// lies. Shared files are the trap: adopting a hand-formatted native file
+// round-trips its owned key *values* exactly, but generate() still rewrites
+// it (sortKeys/serialize reformat), so a value-equality-only preview
+// under-reports by exactly the shared files being adopted for the first
+// time. Locks plan.generates against res.written across both bootstrap
+// directions so this can't silently drift back.
+test('plan.generates matches what syncApply actually writes, bootstrap both directions', () => {
+  const claudeRoot = claudeOnly()
+  const claudePlan = syncPlan(claudeRoot, { targets: TARGETS })
+  const claudeRes = syncApply(claudeRoot, { targets: TARGETS })
+  assert.deepEqual(
+    [...claudePlan.generates.map((g) => g.path)].sort(),
+    [...claudeRes.written].sort(),
+    'claude-only bootstrap: plan promised exactly what apply wrote'
+  )
+  assert.ok(claudePlan.generates.some((g) => g.path === '.claude/settings.json'), 'reformatted shared file is not silently dropped')
+
+  const codexRoot = tmp()
+  write(
+    codexRoot,
+    '.codex/config.toml',
+    ['[mcp_servers.deepwiki]', 'url = "https://mcp.deepwiki.com/mcp"', '', 'approval_policy = "on-request"', 'model = "gpt-5"', ''].join(
+      '\n'
+    )
+  )
+  write(codexRoot, '.codex/hooks.json', JSON.stringify({ hooks: { PreToolUse: [{ type: 'command', command: 'guard.sh' }] } }))
+  write(codexRoot, 'AGENTS.md', '# House rules\n\nAlways run tests.\n')
+  const codexPlan = syncPlan(codexRoot, { targets: TARGETS })
+  const codexRes = syncApply(codexRoot, { targets: TARGETS })
+  assert.deepEqual(
+    [...codexPlan.generates.map((g) => g.path)].sort(),
+    [...codexRes.written].sort(),
+    'codex-only bootstrap: plan promised exactly what apply wrote'
+  )
+  assert.ok(codexPlan.generates.some((g) => g.path === '.codex/config.toml'), 'reformatted shared file is not silently dropped')
 })

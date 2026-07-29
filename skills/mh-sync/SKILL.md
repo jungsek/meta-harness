@@ -1,17 +1,21 @@
 ---
 name: mh-sync
 description: >-
-  Run a meta-harness sync: reconcile native agent config (.claude/, .codex/,
-  .mcp.json…) with the source dir and re-emit every target. Use when the user
-  explicitly invokes mh-sync, or asks to sync their agent config, pull native
-  edits back into source, or make one tool's setup match another right now.
-  For diagnosis-first maintenance use mh-audit; for building a harness from
-  scratch use the meta-harness skill.
+  The primary meta-harness entry point: import the coding-agent setup this repo
+  already has (.claude/, .codex/, .mcp.json…) into one source of truth and emit
+  it to every other agent — both directions, drift folded back. Use when the
+  user invokes mh-sync, or asks to get their Claude Code setup into Codex (or
+  the reverse), sync their agent config, pull native edits back into source, or
+  make one tool's setup match another right now. For diagnosis-first
+  maintenance use mh-audit; to build a harness from nothing use the
+  meta-harness skill.
 ---
 
 # mh-sync
 
-Entry point only — the CLI does the work, the plan is the confirmation.
+Entry point only — the CLI does the work, the plan is the confirmation. This
+is the front door: sync imports what exists and reconciles both ways, so reach
+for it before generate.
 
 1. `meta-harness sync --dry-run` — show the user the plan verbatim
    (`← import / → generate / = clean`). Exit 1 = conflicts, not failure.

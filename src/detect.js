@@ -46,3 +46,17 @@ export function detectTargets(root) {
 }
 
 export const detectedNames = (rows) => rows.filter((r) => r.repo.length || r.bin).map((r) => r.target)
+
+// V1-FOCUS §1: claude/codex are the only targets detection may auto-enable.
+// A cursor/opencode/hermes signal is real but becomes a proposal, never an
+// enabled target — callers print it as one dim FYI line, nothing more.
+export const PAIR_TARGETS = ['claude', 'codex']
+
+// → { enabled, proposed } from detectTargets() rows.
+export function splitDetected(rows) {
+  const hits = detectedNames(rows)
+  return {
+    enabled: hits.filter((t) => PAIR_TARGETS.includes(t)),
+    proposed: hits.filter((t) => !PAIR_TARGETS.includes(t)),
+  }
+}
