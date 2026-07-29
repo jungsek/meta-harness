@@ -659,3 +659,50 @@ test('refuses to force-generate over config it never scanned', () => {
   assert.equal(read(root, '.cursor/commands/ship.md'), 'my own version\n')
   assert.equal(read(root, '.meta-harness/connections/mcp.jsonc'), src, 'refused before the fold — repo untouched')
 })
+
+// V1-FOCUS §2: a non-agent file sitting in a managed agents dir must never
+// block sync — it is content, not config.
+test('a non-agent file in .claude/agents/ is skipped, never blocks, never imported', () => {
+  const root = tmp()
+  write(root, '.claude/agents/README.md', '# Agents\n\nThis dir holds agent definitions.\n')
+  write(root, '.claude/agents/planner.md', '---\ndescription: plans\n---\nYou plan.\n')
+
+  const plan = syncPlan(root, { targets: TARGETS })
+  assert.deepEqual(plan.conflicts, [])
+  assert.equal(plan.unsupported.filter((u) => u.fatal).length, 0, 'nothing fatal')
+  const skipped = plan.unsupported.find((u) => u.path === '.claude/agents/README.md')
+  assert.ok(skipped, 'README surfaces once in the plan feed')
+  assert.equal(skipped.skipped, true)
+  assert.ok(!skipped.fatal)
+  assert.ok(!plan.imports.some((i) => i.name === 'README'), 'never treated as an importable item')
+
+  syncApply(root, { targets: TARGETS })
+  assert.equal(read(root, '.claude/agents/README.md'), '# Agents\n\nThis dir holds agent definitions.\n', 'left in place')
+  assert.ok(!exists(root, '.meta-harness/agents/README.md'), 'never folded into the source')
+  assert.match(read(root, '.meta-harness/agents/planner.md'), /You plan\./, 'the real agent alongside it still imports')
+})
+
+test('a non-.toml file in .codex/agents/ is invisible to sync, same as before', () => {
+  const root = tmp()
+  write(root, '.codex/agents/notes.md', 'not a codex agent, just notes\n')
+  write(root, '.codex/agents/planner.toml', `name = "planner"\ndescription = "plans"\ndeveloper_instructions = '''\nYou plan.\n'''\n`)
+
+  const plan = syncPlan(root, { targets: ['codex'] })
+  assert.deepEqual(plan.conflicts, [])
+  assert.deepEqual(plan.unsupported, [])
+
+  syncApply(root, { targets: ['codex'] })
+  assert.equal(read(root, '.codex/agents/notes.md'), 'not a codex agent, just notes\n', 'left in place, untouched')
+  assert.match(read(root, '.meta-harness/agents/planner.md'), /You plan\./)
+})
+
+test('a real agent with broken frontmatter stays a loud failure, not a silent skip', () => {
+  const root = tmp()
+  write(root, '.claude/agents/broken.md', '---\ndescription: [unterminated\n---\nDoes stuff.\n')
+
+  // Not classified as a non-definition (that path never fires for genuinely
+  // broken frontmatter), so it goes through the normal import path — which
+  // then fails loudly, since the content really can't be modeled as an agent.
+  assert.throws(() => syncApply(root, { targets: TARGETS }), /frontmatter parse failed/)
+  assert.equal(read(root, '.claude/agents/broken.md'), '---\ndescription: [unterminated\n---\nDoes stuff.\n', 'native file untouched')
+})

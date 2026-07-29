@@ -26,7 +26,7 @@ import os from 'node:os'
 import path from 'node:path'
 import matter from 'gray-matter'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
-import { detectTargets, detectedNames } from './detect.js'
+import { detectTargets, splitDetected } from './detect.js'
 import { discover, generate, loadConfig, loadManifest } from './engine.js'
 import { KNOWN_TARGETS } from './model.js'
 import { NAME_OK as CODEX_NAME_OK } from './targets/codex.js'
@@ -223,9 +223,18 @@ function fileItems(ctx, target, { dir, category, ext }) {
       if (!entry) ctx.warnings.push(`${rel}: symlink meta-harness did not write — left alone, not imported`)
       continue
     }
+    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
+    // V1-FOCUS §2: a real subagent needs frontmatter to be recognized as one
+    // at all (every emitter injects at least `name:`) — a plain README or
+    // notes file with none is content, not config, and must never block
+    // sync. Frontmatter that exists but fails to parse is a real broken
+    // agent, not a non-definition — that one stays a loud (fatal) complaint.
+    if (present && category === 'agents' && ext === '.md' && !isAgentDefinition(raw)) {
+      ctx.unsupported.push({ target, path: rel, skipped: true, reason: 'not an agent definition — left in place' })
+      continue
+    }
     const exp = ctx.expected.get(rel)
     const expected = exp ? (exp.content ?? readIf(exp.symlinkTo) ?? undefined) : undefined
-    const raw = present ? fs.readFileSync(p, 'utf8') : undefined
     const tracked = Boolean(entry)
     out.push({
       target,
@@ -251,6 +260,23 @@ function fileItems(ctx, target, { dir, category, ext }) {
 
 // CLAUDE.md that is only the generated @AGENTS.md import carries no prose.
 const isStub = (raw) => /^\s*(<!--[^]*?-->\s*)*@AGENTS\.md\s*$/.test(raw)
+
+// A file with no frontmatter fields at all is not an agent definition —
+// mirrors what loadModel accepts (parseAgents warns, doesn't error, on a
+// missing description; but there is no agent at all without frontmatter to
+// hold it). Malformed frontmatter is a different problem — surfaced as-is.
+// `{}` as the options arg opts out of gray-matter's content-keyed cache: a
+// plain `matter(raw)` here would cache this parse (success or thrown, the
+// engine still stashes a `{data: {}}` entry on failure), and the real parse
+// of the same content later in model.js would then silently read that
+// cached empty result back instead of re-throwing.
+const isAgentDefinition = (raw) => {
+  try {
+    return Object.keys(matter(raw, {}).data).length > 0
+  } catch {
+    return true
+  }
+}
 
 function rulesItems(ctx) {
   const out = []
@@ -804,7 +830,10 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   const configured = fs.existsSync(path.join(root, 'meta-harness.jsonc'))
   const mode = configured && fs.existsSync(srcDir) ? 'reconcile' : 'bootstrap'
 
-  const detected = detectedNames(detectTargets(root))
+  // V1-FOCUS §1: detection may only auto-enable the claude/codex pair; any
+  // other detected target (cursor/opencode/hermes) is a proposal, surfaced
+  // below, never folded into the enabled set.
+  const { enabled: detected, proposed } = mode === 'bootstrap' ? splitDetected(detectTargets(root)) : { enabled: [], proposed: [] }
   const targetNames = targets ?? (mode === 'bootstrap' ? (detected.length ? detected : cfg.targets) : cfg.targets)
   const enabled = targetNames.includes('*') ? KNOWN_TARGETS : targetNames
 
@@ -926,6 +955,7 @@ export function syncPlan(root, { targets = null, prefer = null } = {}) {
   return {
     mode,
     targets: enabled,
+    proposed,
     imports,
     conflicts,
     unsupported,

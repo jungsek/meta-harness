@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
+import { splitDetected } from '../src/detect.js'
 import { generate, status, uninstall } from '../src/engine.js'
 import { isLink } from '../src/util.js'
 
@@ -373,14 +374,35 @@ const BIN = path.resolve(import.meta.dirname, '../bin/meta-harness.js')
 // Strip agent binaries from PATH so machine signals don't leak into detection tests.
 const BARE_ENV = { ...process.env, PATH: '/usr/bin:/bin' }
 
-test('init detects targets from repo signals; nothing found → default', () => {
+// V1-FOCUS §1: detection may PROPOSE cursor/opencode/hermes but never
+// auto-enable them — only claude/codex ever enter the enabled set.
+test('splitDetected: pair-only auto-enable, everything else is a proposal', () => {
+  const rows = (target) => ({ target, repo: [], bin: null })
+  const hit = (target) => ({ ...rows(target), repo: [`.${target}`] })
+
+  assert.deepEqual(splitDetected([hit('claude'), hit('cursor'), hit('opencode'), rows('codex'), rows('hermes')]), {
+    enabled: ['claude'],
+    proposed: ['cursor', 'opencode'],
+  })
+  assert.deepEqual(splitDetected([hit('cursor'), hit('opencode'), hit('hermes')]), {
+    enabled: [],
+    proposed: ['cursor', 'opencode', 'hermes'],
+  })
+  assert.deepEqual(splitDetected([hit('claude'), hit('codex')]), { enabled: ['claude', 'codex'], proposed: [] })
+})
+
+test('init detects targets from repo signals; only the pair auto-enables, others are proposed', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-detect-'))
   fs.mkdirSync(path.join(root, '.cursor'), { recursive: true })
   fs.writeFileSync(path.join(root, 'opencode.json'), '{}')
   const out = execFileSync(process.execPath, [BIN, 'init', '--no-skill'], { cwd: root, env: BARE_ENV, encoding: 'utf8' })
-  assert.match(out, /\.cursor in repo/)
+  // cursor/opencode were detected but are not claude/codex, so nothing
+  // auto-enables — config falls back to the default pair, and the cursor/
+  // opencode hits surface as a proposal, not an enabled target.
   const cfg = fs.readFileSync(path.join(root, 'meta-harness.jsonc'), 'utf8')
-  assert.match(cfg, /"targets": \["cursor","opencode"\]/)
+  assert.match(cfg, /"targets": \["claude","codex"\]/)
+  assert.match(out, /cursor/)
+  assert.match(out, /opencode/)
 
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-detect-'))
   const out2 = execFileSync(process.execPath, [BIN, 'init', '--no-skill'], { cwd: bare, env: BARE_ENV, encoding: 'utf8' })
