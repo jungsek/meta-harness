@@ -3,3 +3,8 @@ meta-harness.local.jsonc
 .e2e/
 skills/meta-harness-workspace/
 .team/
+
+# agent-harness local state (wired by new-project, machine-local)
+.claude/
+.impeccable/
+.pnpm-store/
