@@ -2,9 +2,12 @@ node_modules/
 meta-harness.local.jsonc
 .e2e/
 skills/meta-harness-workspace/
-.team/
 
-# agent-harness local state (wired by new-project, machine-local)
-.claude/
 .impeccable/
 .pnpm-store/
+
+# agent-harness: symlinks into the jung-os-2 root harness, wired by
+# 01-HARNESS/link-project-harness.sh. Machine-local, never committed.
+.claude/
+.agents/
+.codex/
