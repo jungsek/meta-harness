@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "claude-fable-5[1m]",
+  "effortLevel": "high",
+  "alwaysThinkingEnabled": true,
+  "showThinkingSummaries": false,
+  "switchModelsOnFlag": false,
+  "fastMode": false,
+  "fastModePerSessionOptIn": false,
+  "language": "english",
+  "cleanupPeriodDays": 30,
+  "autoUpdatesChannel": "latest",
+  "defaultShell": "bash",
+  "includeGitInstructions": true,
+  "claudeMdExcludes": [],
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git diff)",
+      "Bash(git status)",
+      "Bash(herdr --session *)",
+      "Bash(herdr pane *)",
+      "Bash(herdr agent *)",
+      "Bash(herdr tab *)",
+      "Bash(claude plugin list *)",
+      "Bash(npm test)"
+    ],
+    "ask": [],
+    "deny": [
+      "Bash(git push --force)",
+      "Bash(git push -f)",
+      "Bash(rm -rf *)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ],
+    "additionalDirectories": [],
+    "defaultMode": "auto"
+  },
+  "hooks": {},
+  "disableAllHooks": false,
+  "env": {},
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [],
+  "disabledMcpjsonServers": [],
+  "disableClaudeAiConnectors": true,
+  "sandbox": {
+    "enabled": false,
+    "failIfUnavailable": false,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [],
+    "allowUnsandboxedCommands": true,
+    "network": {
+      "allowUnixSockets": [],
+      "allowAllUnixSockets": false,
+      "allowLocalBinding": false,
+      "allowedDomains": [],
+      "deniedDomains": [],
+      "strictAllowlist": false
+    },
+    "filesystem": {
+      "allowWrite": [],
+      "denyWrite": [],
+      "denyRead": [],
+      "allowRead": []
+    }
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "ponytail@ponytail": true,
+    "humanizer@humanizer": true,
+    "claude-security@claude-plugins-official": true,
+    "watch@claude-video": true,
+    "codex@openai-codex": true,
+    "agentmemory@agentmemory": true,
+    "shopify-ai-toolkit@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "liquid-lsp@claude-plugins-official": true,
+    "liquid-skills@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "claude-video": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/bradautomates/claude-video.git"
+      }
+    },
+    "humanizer": {
+      "source": {
+        "source": "github",
+        "repo": "blader/humanizer"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    },
+    "agentmemory": {
+      "source": {
+        "source": "github",
+        "repo": "rohitg00/agentmemory"
+      }
+    }
+  },
+  "skippedMarketplaces": [],
+  "skippedPlugins": [],
+  "skillOverrides": {},
+  "disableBundledSkills": false,
+  "disableSkillShellExecution": false,
+  "maxSkillDescriptionChars": 1536,
+  "skillListingBudgetFraction": 0.01,
+  "autoMemoryEnabled": true,
+  "fileCheckpointingEnabled": true,
+  "autoCompactEnabled": true,
+  "precomputeCompactionEnabled": true,
+  "worktree": {
+    "symlinkDirectories": [],
+    "sparsePaths": [],
+    "baseRef": "fresh",
+    "bgIsolation": "worktree"
+  },
+  "disableAgentView": false,
+  "disableWorkflows": false,
+  "workflowKeywordTriggerEnabled": true,
+  "workflowSizeGuideline": "medium",
+  "disableArtifact": false,
+  "disableRemoteControl": false,
+  "remoteControlAtStartup": true,
+  "agentPushNotifEnabled": true,
+  "inputNeededNotifEnabled": true,
+  "statusLine": {
+    "type": "command",
+    "command": "ccusage statusline"
+  },
+  "theme": "dark",
+  "editorMode": "default",
+  "outputStyle": "default",
+  "tui": "default",
+  "viewMode": "default",
+  "spinnerTipsEnabled": true,
+  "respectGitignore": true,
+  "prefersReducedMotion": false,
+  "syntaxHighlightingDisabled": false,
+  "autoScrollEnabled": true,
+  "showTurnDuration": true,
+  "teammateMode": "in-process",
+  "terminalProgressBarEnabled": true,
+  "preferredNotifChannel": "auto",
+  "wheelScrollAccelerationEnabled": true,
+  "emojiCompletionEnabled": true,
+  "promptSuggestionEnabled": false,
+  "awaySummaryEnabled": true,
+  "showClearContextOnPlanAccept": false,
+  "respondToBashCommands": true,
+  "askUserQuestionTimeout": "never",
+  "skipWebFetchPreflight": false
+}

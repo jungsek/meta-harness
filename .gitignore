@@ -6,8 +6,7 @@ skills/meta-harness-workspace/
 .impeccable/
 .pnpm-store/
 
-# agent-harness: symlinks into the jung-os-2 root harness, wired by
-# 01-HARNESS/link-project-harness.sh. Machine-local, never committed.
-.claude/
-.agents/
-.codex/
+
+# agent-harness: synced copies from the jung-os-2 root are COMMITTED so CI and
+# clones keep the harness; local-only overrides stay out.
+.claude/settings.local.json

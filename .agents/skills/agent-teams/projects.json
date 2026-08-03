@@ -1,0 +1,32 @@
+[
+  {
+    "slug": "jung-os-root",
+    "name": "jung-os root",
+    "path": "/Users/jungsek/jung-os-2",
+    "port": 7101
+  },
+  {
+    "slug": "jung-os-dashboard-2",
+    "name": "jung-os-dashboard-2",
+    "path": "/Users/jungsek/jung-os-2/05-PROJECTS/jung-os-dashboard-2",
+    "port": 7107
+  },
+  {
+    "slug": "fables-ai",
+    "name": "Fable's AI",
+    "path": "/Users/jungsek/jung-os-2/05-PROJECTS/fables-ai",
+    "port": 7105
+  },
+  {
+    "slug": "saint-avia",
+    "name": "St.Avia",
+    "path": "/Users/jungsek/jung-os-2/05-PROJECTS/saint-avia",
+    "port": 7106
+  },
+  {
+    "slug": "aston-abode-dashboard",
+    "name": "Aston Abode Dashboard",
+    "path": "/Users/jungsek/jung-os-2/05-PROJECTS/aston-abode-dashboard",
+    "port": 7108
+  }
+]
