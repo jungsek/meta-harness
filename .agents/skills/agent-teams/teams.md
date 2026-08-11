@@ -18,7 +18,7 @@ P1/P2/P3 verify gates, the DESIGN.md authority, the component-sourcing line, the
 human gates) was folded into `.claude/agents/development.md` and
 `.claude/agents/frontend.md`, where the agent that must obey it actually reads it.
 
-## The nine agents
+## The eight agents
 
 | Agent | Class | Model | Owns |
 |---|---|---|---|
@@ -30,7 +30,6 @@ human gates) was folded into `.claude/agents/development.md` and
 | `shopify` | operator | sonnet | store management, theme/app dev, commerce data |
 | `browser` | operator | sonnet | interactive authed browser sessions |
 | `marketing` | operator | sonnet | CRO, SEO, copy, social, launches |
-| `obsidian` | operator | sonnet | vault notes, bases, canvases |
 
 No specialist fits → run at main-session level. Judges never review work built by
 their own runtime instance.
