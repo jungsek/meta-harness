@@ -30,7 +30,7 @@ impeccable adjudicates general UI aesthetics (color, type, layout, motion intent
 | Chart encoding + palette validation | `dataviz` — impeccable has no chart method |
 | WCAG 2.2 audit procedure | `accessibility` (web-qa judge owns the verdict) |
 | Vercel Web Interface Guidelines | `web-design-guidelines` (web-qa judge owns the verdict) |
-| Component sourcing | routing order + interaction-complexity line, below; full map in `ui-sources` |
+| Component sourcing | routing order + source map + interaction-complexity line, below |
 
 Historical note: the v1 `design-taste-frontend` ruling cut `taste` for competing with `DESIGN.md`. That is superseded — `taste-skill` is installed and live in the v2 slot, and runs **under** impeccable, never against it.
 
@@ -42,7 +42,7 @@ Historical note: the v1 `design-taste-frontend` ruling cut `taste` for competing
 
 Read the repo's `DESIGN.md` if it has one, then the existing components you will sit beside. A redesign **audits the current state first** — you cannot improve what you have not characterized.
 
-For Operate-mode surfaces (app UI, dashboards, settings), read `ui-sources` → `reference/clean-ui-specs.md` — the official distilled spec sheet (type scales, gray hierarchies, radii, control heights). `DESIGN.md` wins on conflict; the specs are greenfield defaults.
+For Operate-mode surfaces (app UI, dashboards, settings), read the official distilled spec sheet — `06-REFERENCE/clean-ui-cheatsheets-heyrico/RESEARCH/clean-ui-specs.md` in the jung-os-2 monorepo (type scales, gray hierarchies, radii, control heights; monorepo-local path — skip silently where it doesn't resolve). `DESIGN.md` wins on conflict; the specs are greenfield defaults.
 
 - `$impeccable` with `init` — new project with no `DESIGN.md`. Fills the seed template (dials, design read, references and anti-references, preservation rules) and seeds brand color. Do this before any code.
 
@@ -61,16 +61,38 @@ For Operate-mode surfaces (app UI, dashboards, settings), read `ui-sources` → 
 
 1. **Already installed?** `package.json` and existing components first. Reuse beats any install.
 2. `$pick-ui-library` — Emil's curated list runs FIRST for anything library-shaped: primitives, animation engines, state, styling utils, charts. If it has an answer, take it.
-3. `$ui-sources` — Jung's source map for what Emil's list doesn't cover: pre-built blocks, showpiece effects, AI-app surfaces, marketing components. Highlights:
-   - **AI UI (chat, agents, reasoning, citations) → AI Elements by default** (`npx ai-elements@latest`, shadcn registry). Never hand-build message lists, reasoning accordions, or citation chips. `thinking-orbs` for AI loading states; AIcss for one-off blocks.
-   - **Showpiece motion** → Canvas UI (WebGL effects, shadcn registry), React Bits (animated text/backgrounds, shadcn registry), `metal-fx` / `border-beam` (npm accents).
-   - **Block search** → 21st.dev. **Quota rule:** 21st free tier (2 copies/day) and Originkit (10 fetches/day) can stall an unattended pane on a cap — interactive sessions only, or flag Jung.
+3. **The source map below** — for what Emil's list doesn't cover: pre-built blocks, showpiece effects, AI-app surfaces, marketing components.
 4. Not covered → say so explicitly, recommend from general knowledge, flag the departure.
+
+**Source map** (vetted 2026-08-11 against the pinned stack):
+
+*AI-app surfaces (chat, agents, reasoning, citations):*
+
+| Source | What | Install |
+|---|---|---|
+| **AI Elements** (Vercel) — elements.ai-sdk.dev | **DEFAULT for AI UI.** ~47 shadcn-convention components: Message, Conversation, Prompt Input, Reasoning, Chain of Thought, Sources, Inline Citation, Model Selector, Tool, Code Block, Terminal, File Tree, Web Preview, workflow canvas. Deep AI SDK (useChat/streaming) integration. Never hand-build message lists, reasoning accordions, or citation chips. | `npx ai-elements@latest` (shadcn registry) |
+| **thinking-orbs** (Antalik) — orbs.jakubantalik.com | 9 animated "thinking" states for AI loading. Canvas-based, SSR-safe, zero deps. Use instead of a spinner in agent UIs. | `npm install thinking-orbs` |
+| **AIcss** — aicss.dev | 14 one-off copy-paste agent-UI blocks (thinking state, file diff, streaming text). Single-block grabs only; anything systematic → AI Elements. | copy-paste |
+
+*Showpiece visuals and motion (marketing pages, heroes):*
+
+| Source | What | Install |
+|---|---|---|
+| **Canvas UI** — canvasui.dev | 33 GPU-accelerated canvas/WebGL effects (Liquid, Glass, Particle Reveal, Ripple…). Respects `prefers-reduced-motion`, mounts only when visible. Hero moments, not structural UI. | `npx shadcn@latest add @canvas-ui/<name>-react` |
+| **React Bits** — reactbits.dev | 110+ animated components: split/blur/decrypt text, Aurora/Hyperspeed backgrounds. Tailwind + TS variants. Go-to for flashy marketing motion over a shadcn base. | `npx shadcn@latest add "https://reactbits.dev/r/<component>"` |
+| **metal-fx** (Antalik) — metal.jakubantalik.com | Liquid-metal WebGL chrome effect for a premium CTA accent. One effect, client component. | `npm install metal-fx` |
+| **border-beam** (Antalik) — beam.jakubantalik.com | Animated glowing border around cards/buttons/inputs. Pure CSS, decorative layers `pointer-events: none`. | `npm install border-beam` |
+
+*Micro-interactions:* `$transitions-dev` — 27 copy-ready recipes, before writing bespoke animation on state changes.
+
+*Block search:* **21st.dev** — 12k+ community components/blocks (mirrors Aceternity + Magic UI) when a specific pre-built section is needed. Community quality varies.
+
+*Constrained sources — quota rule:* 21st.dev free tier (**2 copies/day**) and Originkit (**10 fetches/day**, MCP + API key) can stall an unattended pane on a cap — interactive sessions only, or flag Jung. Native Bloom is React Native ONLY (browse catalog, links out) — irrelevant to web work. Effects are client components (WebGL/canvas) — keep them out of server components.
 
 **The interaction-complexity line stands underneath all of it:**
 
 - **Presentational** (top bars, side rails, cards, badges, layout chrome) → bespoke is correct. The minimal-code ladder wins.
-- **Focus management, keyboard nav, or any ARIA interaction pattern** (tabs, dialogs, dropdowns, comboboxes, tooltips, sortable tables) → **registry always** (shadcn / Base UI). Hand-rolling these ships invisible accessibility defects automated gates cannot catch — a `role="tablist"` with no keyboard handling passes axe silently. ui-sources' effect layers are decorative, never a substitute for accessible primitives.
+- **Focus management, keyboard nav, or any ARIA interaction pattern** (tabs, dialogs, dropdowns, comboboxes, tooltips, sortable tables) → **registry always** (shadcn / Base UI). Hand-rolling these ships invisible accessibility defects automated gates cannot catch — a `role="tablist"` with no keyboard handling passes axe silently. The source map's effect layers are decorative, never a substitute for accessible primitives.
 
 **MANDATORY before adding any UI dependency:** the pick-ui-library gate. No new UI dependency ships without a one-line justification (task, source chosen, why).
 
@@ -88,7 +110,7 @@ Platform-native before libraries: CSS over JS, native inputs over picker libs, t
 2. `$improve-animations` — **during** implementation.
 3. `$review-animations` — **after**, before you call it done.
 
-Supporting: `$transitions-dev` for copy-ready CSS transitions (27 recipes — reach for these before bespoke animation on state changes), `$transitions-polish` for refinement. Showpiece motion (heroes, backgrounds) is a sourcing decision — route through `ui-sources` (Canvas UI / React Bits / Antalik effects), still inside this trio's order. No motion work happens outside it.
+Supporting: `$transitions-dev` for copy-ready CSS transitions (27 recipes — reach for these before bespoke animation on state changes), `$transitions-polish` for refinement. Showpiece motion (heroes, backgrounds) is a sourcing decision — route through the source map in step 3 (Canvas UI / React Bits / Antalik effects), still inside this trio's order. No motion work happens outside it.
 
 ### 6. Verify — three enforcement points
 
@@ -128,7 +150,7 @@ Verify the RENDERED result in a real browser (`$run`, or request the browser age
 
 **CLIs:** the development toolchain (`node` / `pnpm` / `tsc`); dev server via `$run` when visual verification is needed.
 
-**Registries, installed per project on demand:** shadcn · AI Elements · Canvas UI · React Bits · 21st.dev (quota-capped) · Next.js. Full map with install commands and caveats: `ui-sources`.
+**Registries, installed per project on demand:** shadcn · AI Elements · Canvas UI · React Bits · 21st.dev (quota-capped) · Next.js. Install commands and caveats: the source map in step 3.
 
 ---
 
