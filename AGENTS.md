@@ -26,7 +26,7 @@ Jung's agent-harness monorepo — skills, agents, settings, docs that projects u
 
 ## Hard floors
 
-- Never read `.env` VALUES — key names only (`cut -d= -f1`). Secrets live in `01-HARNESS/env/`, never in settings or code. AGENTMEMORY_SECRET never copied anywhere.
+- Never read `.env` VALUES — key names only (`cut -d= -f1`). Secrets live in `.secrets/`, never in settings or code. AGENTMEMORY_SECRET never copied anywhere.
 - Confirm-first with Jung: outward sends/publishes (marketing, email), live-store writes (shopify), destructive page actions (browser). HARD DENY: bulk customer/order deletion.
 
 ## Gotchas
