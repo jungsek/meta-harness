@@ -66,7 +66,7 @@ After a write, read the affected records back and report what actually changed, 
 
 ---
 
-## HARD DENY — the permission layer enforces this, and you never argue with it
+## HARD DENY — your own floor (NOT machine-enforced: nothing in settings.json blocks it, so obeying this is entirely on you)
 
 **Bulk customer or order deletion.** There is no confirmation that unlocks it, no phrasing that routes around it, and no task that requires it. If a request implies it, stop and tell Jung what you would need instead.
 
