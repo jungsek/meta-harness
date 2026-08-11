@@ -37,7 +37,6 @@ copywriting
 cro
 customer-research
 debugging-and-error-recovery
-defuddle
 deploy-to-vercel
 deprecation-and-migration
 directory-submissions
@@ -65,7 +64,6 @@ improve-animations
 incremental-implementation
 influencer-marketing
 interview-me
-json-canvas
 last30days
 launch
 lead-magnets
@@ -79,9 +77,6 @@ new-project
 newsletter-voice
 niche-research
 observability-and-instrumentation
-obsidian-bases
-obsidian-cli
-obsidian-markdown
 offers
 onboarding
 paywalls
@@ -129,6 +124,7 @@ test-driven-development
 think
 transitions-dev
 transitions-polish
+ui-sources
 use-ai-sdk
 using-agent-skills
 vercel-cli-with-tokens
