@@ -26,9 +26,9 @@ Herdr skill.
 ## Launch a team
 
 1. `herdr workspace create --cwd <path> --label team:<project>:<feature>
-   --no-focus`. Pick the target project from
-   `.agents/skills/agent-teams/projects.json`. Its `.result.root_pane` is the
-   lead's pane — no split needed for the lead.
+   --no-focus`. The target is the repo root or any direct child of
+   `05-PROJECTS/` — the directory name IS the slug, no registry to consult.
+   Its `.result.root_pane` is the lead's pane — no split needed for the lead.
 2. Start the lead there with permissions bypassed and its agent definition
    loaded:
 

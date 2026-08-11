@@ -44,7 +44,8 @@ the prompt.
 
 **How to create a team (always lead-first, native herdr):**
 1. `herdr workspace create --cwd <project-path> --label team:<project>:<feature>
-   --no-focus`. Pick a project from `projects.json`. The response carries
+   --no-focus`. The target is the repo root or any direct child of
+   `05-PROJECTS/` (`ls 05-PROJECTS/` is the roster). The response carries
    `.result.root_pane` — that IS the lead's pane; do not split for it.
 2. Start the lead in that root pane **with permissions bypassed and its agent
    definition loaded**:

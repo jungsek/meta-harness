@@ -152,7 +152,12 @@ Dispatch flow and teardown: `orchestrator.md`.
 
 ## Targets
 
-`projects.json` — slug, name, path, port. Team × target project is a matrix, not
-a hierarchy: the development team can target any project today and another
-tomorrow, and several teams may run in parallel with their own leads and their
-own workspaces.
+A target is the repo root or any direct child of `05-PROJECTS/`; the directory
+name is its slug. `ls 05-PROJECTS/` IS the roster — there is no registry file
+(`projects.json` DELETED 2026-08-11: it hand-copied what the filesystem already
+knows, had drifted to miss 2 of 6 projects, and its `port` field was read by
+nothing). A project on disk is targetable the moment it exists.
+
+Team × target project is a matrix, not a hierarchy: the development team can
+target any project today and another tomorrow, and several teams may run in
+parallel with their own leads and their own workspaces.
