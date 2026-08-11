@@ -26,7 +26,7 @@ impeccable adjudicates general UI aesthetics (color, type, layout, motion intent
 | Chart encoding + palette validation | `dataviz` — impeccable has no chart method |
 | WCAG 2.2 audit procedure | `accessibility` (web-qa judge owns the verdict) |
 | Vercel Web Interface Guidelines | `web-design-guidelines` (web-qa judge owns the verdict) |
-| Component sourcing | the interaction-complexity line, below |
+| Component sourcing | routing order + interaction-complexity line, below; full map in `ui-sources` |
 
 Historical note: the v1 `design-taste-frontend` ruling cut `taste` for competing with `DESIGN.md`. That is superseded — `taste-skill` is installed and live in the v2 slot, and runs **under** impeccable, never against it.
 
