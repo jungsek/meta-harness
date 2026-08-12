@@ -59,33 +59,10 @@ For Operate-mode surfaces (app UI, dashboards, settings), read the official dist
 
 1. **Already installed?** `package.json` and existing components first. Reuse beats any install.
 2. `$pick-ui-library` — Emil's curated list runs FIRST for anything library-shaped: primitives, animation engines, state, styling utils, charts. If it has an answer, take it.
-3. **The source map below** — for what Emil's list doesn't cover: pre-built blocks, showpiece effects, AI-app surfaces, marketing components.
+3. **The source map** — canonical home: `06-REFERENCE/frontend-design/component-sources.md` in the jung-os-2 monorepo (read it when routing; monorepo-local path — fall back to general knowledge where it doesn't resolve). Covers what Emil's list doesn't: AI-app surfaces (AI Elements is DEFAULT for AI UI — never hand-build message lists, model selectors, terminals), showpiece effects (Canvas UI, React Bits, Antalik singles), block search (21st.dev), micro-interaction recipes (`transitions-dev`), and the quota rules for constrained sources.
 4. Not covered → say so explicitly, recommend from general knowledge, flag the departure.
 
-**Source map** (vetted 2026-08-11 against the pinned stack):
-
-*AI-app surfaces (chat, agents, reasoning, citations):*
-
-| Source | What | Install |
-|---|---|---|
-| **AI Elements** (Vercel) — elements.ai-sdk.dev | **DEFAULT for AI UI.** ~47 shadcn-convention components: Message, Conversation, Prompt Input, Reasoning, Chain of Thought, Sources, Inline Citation, Model Selector, Tool, Code Block, Terminal, File Tree, Web Preview, workflow canvas. Deep AI SDK (useChat/streaming) integration. Never hand-build message lists, reasoning accordions, or citation chips. | `npx ai-elements@latest` (shadcn registry) |
-| **thinking-orbs** (Antalik) — orbs.jakubantalik.com | 9 animated "thinking" states for AI loading. Canvas-based, SSR-safe, zero deps. Use instead of a spinner in agent UIs. | `npm install thinking-orbs` |
-| **AIcss** — aicss.dev | 14 one-off copy-paste agent-UI blocks (thinking state, file diff, streaming text). Single-block grabs only; anything systematic → AI Elements. | copy-paste |
-
-*Showpiece visuals and motion (marketing pages, heroes):*
-
-| Source | What | Install |
-|---|---|---|
-| **Canvas UI** — canvasui.dev | 33 GPU-accelerated canvas/WebGL effects (Liquid, Glass, Particle Reveal, Ripple…). Respects `prefers-reduced-motion`, mounts only when visible. Hero moments, not structural UI. | `npx shadcn@latest add @canvas-ui/<name>-react` |
-| **React Bits** — reactbits.dev | 110+ animated components: split/blur/decrypt text, Aurora/Hyperspeed backgrounds. Tailwind + TS variants. Go-to for flashy marketing motion over a shadcn base. | `npx shadcn@latest add "https://reactbits.dev/r/<component>"` |
-| **metal-fx** (Antalik) — metal.jakubantalik.com | Liquid-metal WebGL chrome effect for a premium CTA accent. One effect, client component. | `npm install metal-fx` |
-| **border-beam** (Antalik) — beam.jakubantalik.com | Animated glowing border around cards/buttons/inputs. Pure CSS, decorative layers `pointer-events: none`. | `npm install border-beam` |
-
-*Micro-interactions:* `$transitions-dev` — 27 copy-ready recipes, before writing bespoke animation on state changes.
-
-*Block search:* **21st.dev** — 12k+ community components/blocks (mirrors Aceternity + Magic UI) when a specific pre-built section is needed. Community quality varies.
-
-*Constrained sources — quota rule:* 21st.dev free tier (**2 copies/day**) and Originkit (**10 fetches/day**, MCP + API key) can stall an unattended pane on a cap — interactive sessions only, or flag Jung. Native Bloom is React Native ONLY (browse catalog, links out) — irrelevant to web work. Effects are client components (WebGL/canvas) — keep them out of server components.
+**Assets — icons, logos, illustrations, fonts:** canonical source library is `06-REFERENCE/frontend-design/asset-sources.md` (same monorepo-local caveat). Icons, logos, and visual assets come from a source with `accepted` status there — NEVER custom-generated. Exceptions (flag in the report): the project's own original brand assets, and one-offs no source covers. `proposed` entries await Jung's review — do not adopt them in builds.
 
 **The interaction-complexity line stands underneath all of it:**
 

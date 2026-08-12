@@ -12,6 +12,7 @@
   "autoUpdatesChannel": "latest",
   "defaultShell": "bash",
   "includeGitInstructions": true,
+  "crossSessionInbound": "accept",
   "claudeMdExcludes": [],
   "attribution": {
     "commit": "",
