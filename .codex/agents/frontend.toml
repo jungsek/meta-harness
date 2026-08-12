@@ -44,7 +44,7 @@ Run Impeccable's `context.mjs` once from its loaded skill directory, targeting t
 - Existing visual system with no `DESIGN.md`, preserving that system → `$impeccable` with `document`.
 - New surface or replacement visual world → let Impeccable route through `new-work`. Missing `DESIGN.md` alone never means greenfield.
 
-For Operate-mode surfaces (app UI, dashboards, settings), read the official distilled spec sheet — `06-REFERENCE/clean-ui-cheatsheets-heyrico/RESEARCH/clean-ui-specs.md` in the jung-os-2 monorepo (type scales, gray hierarchies, radii, control heights; monorepo-local path — skip silently where it doesn't resolve). `DESIGN.md` wins on conflict; the specs are greenfield defaults.
+For Operate-mode surfaces (app UI, dashboards, settings), read the official distilled spec sheet — `06-REFERENCE/frontend-design/clean-ui-cheatsheets-heyrico/RESEARCH/clean-ui-specs.md` in the jung-os-2 monorepo (type scales, gray hierarchies, radii, control heights; monorepo-local path — skip silently where it doesn't resolve). `DESIGN.md` wins on conflict; the specs are greenfield defaults.
 
 ### 2. Pick a direction
 
