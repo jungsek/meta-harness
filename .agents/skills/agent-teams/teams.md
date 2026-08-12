@@ -146,7 +146,7 @@ skills, and its full workflow. Codex has no `--agent` flag; a Codex worker
 receives its persona through the kickoff prompt instead (see
 `01-HARNESS/claude-codex-port/AGENT-PORTING.md` §4).
 
-Full spawn procedure, layout, worktrees, and reporting: `team-leads.md`.
+Full spawn procedure, layout, worktrees, and reporting: `workers.md`.
 Dispatch flow and teardown: `orchestrator.md`.
 
 ## Targets

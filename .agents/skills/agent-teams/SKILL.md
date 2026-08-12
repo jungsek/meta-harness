@@ -18,7 +18,7 @@ Herdr skill.
 1. `.agents/skills/agent-teams/orchestrator.md` — the two-tier dispatch flow
    (orchestrator → workers, no lead tier; ruled 2026-08-11), sizing, native
    herdr commands.
-2. `.agents/skills/agent-teams/team-leads.md` — the worker-ops manual the
+2. `.agents/skills/agent-teams/workers.md` — the worker-ops manual the
    orchestrator follows: spawn, brief, watch, collect, image discipline.
 3. `.agents/skills/agent-teams/teams.md` — the roster: eight agents, five
    standing teams, and the spawn one-liner. Capability lives in `.claude/agents/*.md`,
@@ -35,7 +35,7 @@ Herdr skill.
    `05-PROJECTS/` — the directory name IS the slug, no registry to consult.
    Its `.result.root_pane` stays a plain control/read shell — workers split
    off it.
-3. Spawn each worker per `team-leads.md` with permissions bypassed and its
+3. Spawn each worker per `workers.md` with permissions bypassed and its
    agent definition loaded:
 
    ```bash

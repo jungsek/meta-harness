@@ -19,7 +19,7 @@ work yourself.
 three-tier orchestrator → lead → workers shape).** The lead tier was a relay
 that consumed 52% of a measured run's spend while adding no correctness. You
 spawn workers, brief them, watch them, and roll up — using the worker-ops
-manual in `team-leads.md`. Never spawn a "lead" pane to manage workers for
+manual in `workers.md`. Never spawn a "lead" pane to manage workers for
 you; never let a worker spawn agents.
 
 ## Your tools
@@ -61,7 +61,7 @@ capabilities in the prompt.
    `05-PROJECTS/` (`ls 05-PROJECTS/` is the roster). The response carries
    `.result.root_pane` — keep it as your control/read pane for that
    workspace; it never becomes a manager agent.
-2. Spawn each worker per the procedure in `team-leads.md` — `herdr pane
+2. Spawn each worker per the procedure in `workers.md` — `herdr pane
    split` (or `herdr worktree open` for writers) + `herdr agent start
    <name> --kind <claude|codex|kimi> --pane <id> -- --agent <agent-name>
    --dangerously-skip-permissions` (Codex:
