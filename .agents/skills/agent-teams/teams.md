@@ -1,8 +1,9 @@
 # Teams — the roster
 
-A team is **a lead agent, some worker agents, and a target project**. That is all
-it is. There is no preset file, no `loadout.json`, no separate capability
-manifest to keep in sync.
+A team is **some worker agents and a target project, driven directly by the
+orchestrator** (two-tier ruling 2026-08-11 — no lead tier). That is all it is.
+There is no preset file, no `loadout.json`, no separate capability manifest to
+keep in sync.
 
 **`.claude/agents/*.md` is the single source of truth for every agent's
 capability** — its skills, its workflow, its gates, its boundaries. A herdr
@@ -37,28 +38,29 @@ their own runtime instance.
 **The `Model` column is the worker tier, and it lives in `.claude/agents/*.md`,
 not in a spawn command.** It wins over the CLI default for a `--agent` pane, so
 workers launch with no `--model` flag at all. Opus goes to the two judges whose
-miss costs most — correctness and P0 security. The lead is the one role that
-overrides (`--model opus`): N=1, owns decomposition. Escalate one hard worker
+miss costs most — correctness and P0 security. Escalate one hard worker
 lane if needed, never a whole wave.
 
 ## Standing teams
 
 Five are ratified. Everything else is improvised per the shape below.
 
-A block is four lines — lead, workers, routing, gates. It states NO capability:
+A block is three lines — workers, routing, gates. It states NO capability:
 that lives in `.claude/agents/*.md` and nowhere else. This is what killed
 `presets/` — a block that restates a loadout drifts from it. A block that names
-a shape cannot.
+a shape cannot. Every block is a MAX shape: prune to the work, and explicit
+user constraints ("lightweight", "no review") prune the quality judges
+(`code-review`, `web-qa`) — the `security` triggers are a floor and never
+prune.
 
 ### development
 
 ```
-lead     development
 workers  development ×N (partitioned by file/dir — single writer per path)
-         code-review   (mandatory on non-trivial work)
+         code-review   (non-trivial work headed to merge)
          security      (mandatory when the diff touches auth, secrets, public
                         endpoints, payments, destructive writes, PII, deps,
-                        infra, or data-at-scale)
+                        infra, or data-at-scale — even on prototypes)
 routing  Codex-primary for backend coding and the adversarial review pass;
          Claude for Claude-only skills. Human instruction always wins.
 gates    plan approval · migration apply · merge/deploy
@@ -67,10 +69,10 @@ gates    plan approval · migration apply · merge/deploy
 ### design
 
 ```
-lead     frontend
 workers  frontend ×N (partitioned by surface)
-         web-qa        (mandatory pre-merge on every frontend PR)
-         code-review   (adversarial pass)
+         web-qa        (mandatory pre-merge on every frontend PR;
+                        no PR in scope → no web-qa unless asked)
+         code-review   (adversarial pass, same PR scoping)
 routing  Claude-primary. Codex for the adversarial review pass.
 gates    design direction (once, at init/shape) · merge/deploy
 ```
@@ -78,7 +80,6 @@ gates    design direction (once, at init/shape) · merge/deploy
 ### content
 
 ```
-lead     marketing
 workers  marketing ×N (partitioned by asset — never two workers on one piece)
          browser       (competitor research, live-page teardowns, authed checks)
 routing  Claude-primary — copy quality is the deliverable. Human instruction wins.
@@ -88,7 +89,6 @@ gates    EVERY outward send or publish, no exceptions (jung-os-2 confirm-first f
 ### commerce
 
 ```
-lead     shopify
 workers  shopify ×N (partitioned by surface: theme mechanics / data / app)
          frontend      (storefront look + feel — make it beautiful; PDP, PLP,
                         landing, theme UI. Owns design; shopify owns Liquid)
@@ -106,19 +106,18 @@ the Admin API. Same file touched by both = you partitioned it wrong.
 ### audit
 
 ```
-lead     security
-workers  code-review · web-qa   (judges only — this team writes no source)
+workers  code-review · web-qa · security   (judges only — writes no source)
 routing  mix freely; a judge never reviews work its own runtime instance built
 gates    none to cross — the output is a verdict. Fixes route to a builder team.
 ```
 
-A mixed team is normal: a `frontend` lead with a `development` worker for the API
-the UI needs is one team, not two.
+A mixed team is normal: `frontend` workers plus a `development` worker for the
+API the UI needs is one team, not two.
 
 ## Improvised teams
 
-Novel work does not need a new file. The orchestrator picks a lead agent, picks
-worker agents, and states the gates in the kickoff prompt. If the same
+Novel work does not need a new file. The orchestrator picks worker agents and
+states the gates in the kickoff prompts. If the same
 improvised shape recurs three times, it earns a block in this file — not before.
 Subtractive minimalism: a team earns its place by need.
 
@@ -160,4 +159,4 @@ nothing). A project on disk is targetable the moment it exists.
 
 Team × target project is a matrix, not a hierarchy: the development team can
 target any project today and another tomorrow, and several teams may run in
-parallel with their own leads and their own workspaces.
+parallel, each in its own workspace, all driven by the orchestrator.

@@ -1,31 +1,30 @@
-# Team-lead brief
+# Worker-ops manual (formerly the team-lead brief)
 
-The minimal baseline every team lead needs, in any project. The orchestrator
-hands you this plus your team's goal and the agent definitions your workers
-run. Project specifics layer on top — this baseline stays lean. The roster of
-agents and standing teams is `teams.md`.
+How to spawn, brief, watch, and collect worker agents. Since the two-tier
+ruling (2026-08-11) there is no lead pane: **the orchestrator itself follows
+this manual** when it runs a team. "You" below is the orchestrator. Project
+specifics layer on top — this baseline stays lean. The roster of agents and
+standing teams is `teams.md`.
 
 Provenance: `.agents/skills/agent-teams/` (source). Sibling of `orchestrator.md`.
 
 ## Who you are
-You are a **team lead** — you own ONE team for a body of work. The
-orchestrator talks to you; you drive your worker agents. Vocabulary:
-orchestrator → team → **you (lead)** → worker agents. You never talk to
-another team; you never spawn another team. You spin only your own workers,
-sized to the work (minimum one).
+You are the **orchestrator driving one or more teams**. The human talks to
+you; you drive your worker agents directly. You spin only workers, sized to
+the work (minimum one); workers never spawn agents.
 
-Working dir: the project root you were launched in. Your team's marker is
-`team <feature>` — it must appear in every agent you launch.
+Working dir for a team: its project root (`herdr workspace create --cwd`).
+The team's marker is `team <feature>` — it must appear in every agent you
+launch.
 
 ## Spawn workers as real PANES — hard rule
-Every worker is a **real herdr pane**, spawned natively (you'll be in a herdr
-pane, `HERDR_ENV=1`). herdr is the ONLY substrate. Do **not** use the Claude
-`Agent`/`Task` tool (or Codex in-process subagents) to stand in for a worker:
-in-process subagents are invisible (no pane), die with you, and can't be
-watched or steered by the human on the dashboard/phone — which defeats the
-whole point of terminal-first agent teams. (The `Agent`/`Task` tool is fine
-for a *read-only* search/analysis helper you run for yourself that writes
-nothing.)
+Every worker is a **real herdr pane**, spawned natively (`HERDR_ENV=1`).
+herdr is the ONLY substrate. Do **not** use the Claude `Agent`/`Task` tool
+(or Codex in-process subagents) to stand in for a worker: in-process
+subagents are invisible (no pane), die with you, and can't be watched or
+steered by the human on the dashboard/phone — which defeats the whole point
+of terminal-first agent teams. (The `Agent`/`Task` tool is fine for a
+*read-only* search/analysis helper you run for yourself that writes nothing.)
 
 Spawn one worker per call — call it as many times as the work needs. Give every
 worker a unique herdr agent name; that name is the only handle you need to
@@ -37,8 +36,11 @@ prompt it, wait on it, and read its result.
 # provider. Do NOT pass --model: the agent definition already carries the
 # worker tier. Pass it only to escalate ONE hard lane.
 
-# split off a worker pane — --direction is required, output is JSON
-p1=$(herdr pane split --current --direction right --cwd "$PWD" --no-focus \
+# split off a worker pane inside the TEAM workspace — target its root pane
+# explicitly (you live in your own workspace, so never --current here);
+# --direction is required, output is JSON
+p1=$(herdr pane split --pane <team-root-pane-id> --direction right \
+     --cwd <project-path> --no-focus \
      | python3 -c "import sys,json;print(json.load(sys.stdin)['result']['pane']['pane_id'])")
 
 # Claude worker — --agent loads .claude/agents/<name>.md as its root persona
@@ -171,21 +173,39 @@ Teardown is `worktree.sh remove <repo> <worker-name>`. It refuses while real
 uncommitted work is present; `-f` overrides and discards it, so read the pane
 before reaching for it. The `team/<name>` branch is deliberately left behind.
 
-### Layout convention — lead LEFT main, up to a 2×2 worker grid on the RIGHT
-The house layout is: **you (lead) hold the left main pane; workers tile into a
-2×2 grid on the right half.** Build this with `herdr pane split` calls when
-spawning each worker. Four right panes is the viewability target (readable on
-a dashboard/phone) — NOT a fixed worker count. Run **as many or as few
-workers as the task needs** (you and the orchestrator decide); 4 is just the
-most panes that stay legible at once.
+### Layout convention — control pane LEFT, up to a 2×2 worker grid on the RIGHT
+The house layout inside a team workspace: **the workspace's root pane stays a
+plain control/read shell on the left; workers tile into a 2×2 grid on the
+right half.** Build this with `herdr pane split` calls when spawning each
+worker. Four right panes is the viewability target (readable on a
+dashboard/phone) — NOT a fixed worker count. Run **as many or as few workers
+as the task needs**; 4 is just the most panes that stay legible at once.
 
 Fewer workers → stop early (1 = right half; 2 = two right columns; 3 = drop
-the fourth). The lead pane keeps its full left half throughout. **More than 4
-workers → run them in waves:** wait out the wave, read each worker's rollup
-from its pane, close all worker panes (`herdr pane close <id>`), then spawn the
-next wave. `/clear` does not free a tile. Never keep more than 4 live workers,
-or the grid stops being readable. Keep the pane/agent refs — you need them to
-send text to / read each worker's pane anyway.
+the fourth). **More than 4 workers → run them in waves:** wait out the wave,
+read each worker's rollup from its pane, close all worker panes (`herdr pane
+close <id>`), then spawn the next wave. `/clear` does not free a tile. Never
+keep more than 4 live workers, or the grid stops being readable. Keep the
+pane/agent refs — you need them to send text to / read each worker's pane
+anyway.
+
+## Image + visual verification discipline (ruled 2026-08-11)
+The Alpaca audit found ~15MB of image blocks across five contexts and a
+32-screenshot verify loop — images in a long-lived context get re-read every
+turn, so this is the biggest silent cost multiplier.
+- **Each reference image enters ONE context.** Solo build: the builder reads
+  its references itself, once. Multi-worker: you (or a read-only helper that
+  returns text) look at the references once, put the shared facts — layout,
+  hex values, typography, spacing — in a text brief, and give each worker at
+  most its OWN surface's image. Workers never browse the image directory.
+- **One visual owner per surface.** The builder that owns a screen does its
+  visual iteration; you do not re-screenshot its work, and a judge screenshots
+  only when a judge is in scope.
+- **Screenshot when it will inform an edit; stop after a clean pass.** In
+  practice ~3–6 per screen for pixel-faithful work, one final shot for a
+  rough prototype. Unbounded pixel-nudging loops are the named anti-pattern.
+  Use DOM checks (`getComputedStyle`, text reads) for values and structure —
+  pixels are for composition, clipping, and rendering.
 
 ## Drive + collect
 - Send work/nudges — `herdr agent prompt <name> "<text>" --wait`. That is the
@@ -240,34 +260,28 @@ send text to / read each worker's pane anyway.
 - **Never block on an interactive modal.** Because of (a), any state where you
   or a worker would wait on an in-pane interactive question is a deadlock for
   everyone but a focused human. Put the same instruction in every worker brief.
-- **Gate asks travel as plain pane text, never as a picker.** The human talks
-  only to the orchestrator and never watches your pane. Print any question
-  needing human input as plain text — `BLOCKED: <question> | options | your
-  recommendation` — so the orchestrator's `herdr agent read` picks it up on the
-  `blocked` wake. An interactive option dialog (AskUserQuestion or similar) is
-  at most a convenience layered on top; print the text FIRST, dialog after, if
-  at all. No side-channel file: the pane IS the channel.
+- **Gate asks travel as plain pane text, never as a picker.** The human never
+  watches worker panes — they talk to you. Put this instruction in every
+  worker brief: print any question needing input as plain text — `BLOCKED:
+  <question> | options | recommendation` — so your `herdr agent read` picks it
+  up on the `blocked` wake. An interactive option dialog in a worker pane is a
+  deadlock (unfocused modals ignore injected keys); text FIRST, always. No
+  side-channel file: the pane IS the channel.
 
-## Done means torn down (by the orchestrator, not you)
-Teams are one-off. After your rollup `DONE:`, stay idle for the verification
-window (the human may want fixes); once the work is merged + verified the
-ORCHESTRATOR closes the whole workspace with `herdr workspace close` — you
-never kill your own workspace. Before your rollup, leave nothing stranded:
-commit/hand off all deliverables, remove worker worktrees you created
-(`worktree.sh remove <repo> <worker-name>`), so teardown has nothing to lose.
-
-## Report up
-Print ONE rollup `DONE:` line in your pane when the team's work is complete —
-that pane text is the deliverable the orchestrator reads: what changed (counts/lists from real command output — `git status
+## Done means torn down (by you, after human verification)
+Teams are one-off. When the team's work is complete, roll it up to the human:
+what changed (counts/lists from real command output — `git status
 --porcelain`, test output — never a from-memory guess), the review verdict if
-one was required, and any blocker. If you hit a human gate (plan approval,
-migration apply, merge/deploy) or an outward/irreversible action (push,
-deploy, send, delete-at-scale), STOP and surface it up — do not cross it
-yourself.
+one was required, and any blocker. Keep the workspace up through the human's
+verification window; once the work is merged + verified, leave nothing
+stranded (commit/hand off deliverables, `worktree.sh remove <repo>
+<worker-name>` for worker worktrees) and close the exact workspace id with
+`herdr workspace close`.
 
 ## Safety floor
 No autonomous self-spawn loops; you spin workers only for the assigned goal.
 Workers never spawn further agents. Enforce the project's stated safety rules
-in the work itself. Infrastructure and data-at-scale changes get a second
-review (`/code-review` or a real Codex review-worker pane) before you report
-done.
+in the work itself. Human gates (plan approval, migration apply, merge/deploy)
+and outward/irreversible actions (push, deploy, send, delete-at-scale) stop
+for the human. Infrastructure and data-at-scale changes get a second review
+(`/code-review` or a real Codex review-worker pane) before you report done.
